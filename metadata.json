@@ -1,0 +1,5 @@
+{
+  "name": "Brain Heist",
+  "description": "Brain Heist is a neon-styled, cyberpunk-themed learning game that mixes AI-generated trivia, leaderboards, and RPG-like progression. Players answer AI-generated questions to earn XP and coins, competing on global leaderboards.",
+  "requestFramePermissions": []
+}

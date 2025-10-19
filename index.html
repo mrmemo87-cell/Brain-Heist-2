@@ -1,0 +1,197 @@
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <link rel="icon" type="image/svg+xml" href="/vite.svg" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Brain Heist</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Orbitron:wght@400;500;700&family=Fira+Code:wght@400;500;700&family=Roboto+Mono:wght@400;500&display=swap" rel="stylesheet">
+    <style>
+      :root {
+        --bg-color: #010409;
+        --primary-glow: #00e87c;
+        --secondary-glow: #ff2d91;
+        --accent-glow: #00d0e8;
+        --fail-glow: #ff3838;
+      }
+      
+      /* --- GLOBAL STYLES --- */
+
+      .font-orbitron { font-family: 'Orbitron', sans-serif; }
+      
+      /* Scrollbar */
+      ::-webkit-scrollbar { width: 8px; }
+
+      /* Animations */
+      @keyframes text-glitch { 2%, 64% { transform: translate(2px, 0) skew(0deg); } 4%, 60% { transform: translate(-2px, 0) skew(0deg); } 62% { transform: translate(0, 0) skew(5deg); } }
+      @keyframes fade-in { from { opacity: 0; transform: translateY(20px); } to { opacity: 1; transform: translateY(0); } }
+      .animate-fade-in { animation: fade-in 0.5s ease-out forwards; }
+      @keyframes slide-in-left { from { transform: translateX(-100%); opacity: 0; } to { transform: translateX(0); opacity: 1; } }
+      .animate-slide-in-left { animation: slide-in-left 0.7s cubic-bezier(0.25, 1, 0.5, 1) forwards; }
+      @keyframes shake-error { 0%, 100% { transform: translateX(0); } 10%, 30%, 50%, 70%, 90% { transform: translateX(-5px); } 20%, 40%, 60%, 80% { transform: translateX(5px); } }
+      .animate-shake-error { animation: shake-error 0.5s ease-in-out; }
+      @keyframes modal-glitch { 0% { transform: translate(0); } 20% { transform: translate(-3px, 3px); } 40% { transform: translate(-3px, -3px); } 60% { transform: translate(3px, 3px); } 80% { transform: translate(3px, -3px); } 100% { transform: translate(0); } }
+      .animate-modal-glitch { animation: modal-glitch 0.2s linear 3; }
+
+      /* --- CLASSIC THEME --- */
+
+      body.classic {
+        font-family: 'Fira Code', 'Orbitron', monospace;
+        background-color: var(--bg-color); color: var(--primary-glow); text-shadow: 0 0 2px var(--primary-glow);
+      }
+      body.classic::after {
+        content: " "; display: block; position: absolute; top: 0; left: 0; width: 100vw; height: 100vh;
+        background: repeating-linear-gradient(0deg, rgba(0, 0, 0, 0.5), rgba(0, 0, 0, 0.5) 1px, transparent 1px, transparent 2px);
+        pointer-events: none; z-index: 9999; opacity: 0.5;
+      }
+      .classic .hacker-box {
+        background: rgba(13, 29, 13, 0.3); border: 1px solid var(--primary-glow);
+        box-shadow: 0 0 15px rgba(0, 232, 124, 0.2) inset, 0 0 5px rgba(0, 232, 124, 0.5);
+        backdrop-filter: blur(5px); transition: all 0.3s ease;
+      }
+      .classic .hacker-button {
+        font-family: 'Orbitron', sans-serif; background: transparent; border: 1px solid var(--secondary-glow); color: var(--secondary-glow); text-shadow: 0 0 3px var(--secondary-glow);
+        transition: all 0.2s ease; padding: 0.5rem 1rem; border-radius: 0.25rem;
+      }
+      .classic .hacker-button:hover:not(:disabled) { background: rgba(255, 45, 145, 0.2); box-shadow: 0 0 10px var(--secondary-glow); transform: translateY(-2px); }
+      .classic .hacker-button-primary { border-color: var(--primary-glow); color: var(--primary-glow); text-shadow: 0 0 3px var(--primary-glow); }
+      .classic .hacker-button-primary:hover:not(:disabled) { background: rgba(0, 232, 124, 0.2); box-shadow: 0 0 10px var(--primary-glow); }
+      .classic .hacker-button:disabled { opacity: 0.4; cursor: not-allowed; border-color: #555; color: #555; text-shadow: none; transform: none; box-shadow: none; }
+      .classic .hacker-input { background-color: rgba(0,0,0,0.5); border: 1px solid var(--accent-glow); color: white; padding: 0.5rem 1rem; border-radius: 0.25rem; transition: all 0.3s ease; }
+      .classic .hacker-input:focus { outline: none; box-shadow: 0 0 10px var(--accent-glow); }
+      .classic .animate-text-glitch:hover { animation: text-glitch 0.5s linear infinite; }
+      .classic ::-webkit-scrollbar-track { background: #010409; }
+      .classic ::-webkit-scrollbar-thumb { background: var(--primary-glow); border-radius: 4px; }
+      .classic ::-webkit-scrollbar-thumb:hover { background: var(--secondary-glow); }
+      .classic .terminal-scan-line { position: absolute; top: 0; left: 0; right: 0; height: 3px; background: linear-gradient(to bottom, transparent, var(--primary-glow)); opacity: 0.6; animation: terminal-scan 4s linear infinite; }
+      @keyframes terminal-scan { 0% { transform: translateY(-100%); } 100% { transform: translateY(100vh); } }
+      .classic .tutorial-highlight { animation: classic-highlight-pulse 1.5s ease-in-out infinite; border-radius: 0.25rem; }
+      @keyframes classic-highlight-pulse { 0%, 100% { box-shadow: 0 0 15px 5px rgba(0, 208, 232, 0.8); } 50% { box-shadow: 0 0 25px 10px rgba(0, 208, 232, 1); } }
+      .classic .typing-caret::after { content: '_'; animation: caret-blink 1s step-end infinite; }
+      @keyframes caret-blink { 0%, 100% { opacity: 1; } 50% { opacity: 0; } }
+
+      /* --- MODERN THEME 2.0 (FUTURISTIC) --- */
+      @keyframes modern-bg-pan { 0% { background-position: 0% 50%; } 100% { background-position: 100% 50%; } }
+      @keyframes modern-grid { 0% { background-position: 0 0; } 100% { background-position: 50px 50px; } }
+      @keyframes holographic-in { from { opacity: 0; transform: scale(0.9) translateY(20px); filter: blur(10px); } to { opacity: 1; transform: scale(1) translateY(0); filter: blur(0); } }
+      @keyframes glare-effect { 0% { transform: translateX(-100%) skewX(-30deg); } 100% { transform: translateX(200%) skewX(-30deg); } }
+      @keyframes gauge-fill { to { stroke-dashoffset: 0; } }
+
+      body.modern {
+        font-family: 'Roboto Mono', 'Orbitron', monospace;
+        background-color: #020412; color: #E0E0E0;
+        background-image: linear-gradient(rgba(1, 4, 15, 0.95), rgba(1, 4, 15, 0.95));
+        overflow-x: hidden;
+      }
+      .modern .font-orbitron { font-family: 'Orbitron', sans-serif; }
+      .modern .animated-grid-bg {
+         background-image: linear-gradient(rgba(20, 25, 60, 0.4) 1px, transparent 1px),
+                           linear-gradient(90deg, rgba(20, 25, 60, 0.4) 1px, transparent 1px);
+         background-size: 50px 50px;
+         animation: modern-grid 5s linear infinite;
+      }
+      .modern .hacker-box {
+        background: linear-gradient(135deg, rgba(16, 24, 52, 0.4), rgba(30, 41, 79, 0.4));
+        backdrop-filter: blur(16px) saturate(180%); -webkit-backdrop-filter: blur(16px) saturate(180%);
+        border: 1px solid rgba(129, 140, 248, 0.2); border-radius: 12px;
+        box-shadow: 0 4px 30px rgba(0, 0, 0, 0.3), 0 0 20px rgba(79, 70, 229, 0.2) inset;
+        transition: all 0.3s ease; position: relative; overflow: hidden;
+        animation: holographic-in 0.6s cubic-bezier(0.165, 0.84, 0.44, 1) forwards;
+      }
+      .modern .hacker-box::before, .modern .hacker-box::after {
+        content: ''; position: absolute; width: 0px; height: 0px;
+        border-color: #4f46e5; transition: all 0.4s ease; opacity: 0;
+      }
+      .modern .hacker-box::before { top: -2px; left: -2px; border-top: 2px solid; border-left: 2px solid; border-top-left-radius: 12px;}
+      .modern .hacker-box::after { bottom: -2px; right: -2px; border-bottom: 2px solid; border-right: 2px solid; border-bottom-right-radius: 12px; }
+      .modern .hacker-box:hover::before, .modern .hacker-box:hover::after { width: 40px; height: 40px; opacity: 1; }
+      .modern .hacker-box .glare {
+          position: absolute; top: 0; left: 0; width: 50%; height: 100%;
+          background: linear-gradient(to right, rgba(255,255,255,0) 0%, rgba(255,255,255,0.2) 50%, rgba(255,255,255,0) 100%);
+          transform: translateX(-100%) skewX(-30deg); opacity: 0;
+          transition: transform 0.8s, opacity 0.5s;
+      }
+      .modern .hacker-box:hover .glare {
+          transform: translateX(200%) skewX(-30deg); opacity: 1; transition: transform 0.8s, opacity 0.2s;
+      }
+
+      .modern .hacker-button {
+        font-family: 'Orbitron', sans-serif; background: transparent; color: #a5b4fc;
+        border: 1px solid #4f46e5; border-radius: 8px; text-shadow: none;
+        transition: all 0.2s ease; padding: 0.5rem 1rem; position: relative; overflow: hidden;
+      }
+      .modern .hacker-button:hover:not(:disabled) {
+        background: #4f46e5; color: white; box-shadow: 0 0 20px #4f46e5; transform: translateY(-2px);
+      }
+      .modern .hacker-button-primary { border-color: #0ea5e9; color: #7dd3fc; }
+      .modern .hacker-button-primary:hover:not(:disabled) { background: #0ea5e9; box-shadow: 0 0 20px #0ea5e9; }
+      .modern .hacker-button:disabled { opacity: 0.4; cursor: not-allowed; border-color: #4b5563; color: #6b7280; transform: none; box-shadow: none; background: transparent; }
+      .modern .hacker-input {
+        background-color: rgba(2, 4, 18, 0.7); border: 1px solid rgba(79, 70, 229, 0.5);
+        color: white; padding: 0.5rem 1rem; border-radius: 8px; transition: all 0.3s ease;
+      }
+      .modern .hacker-input:focus { outline: none; border-color: #0ea5e9; box-shadow: 0 0 10px #0ea5e9; }
+      .modern .animate-text-glitch:hover { color: #0ea5e9; animation: text-glitch 0.5s linear infinite; }
+      .modern ::-webkit-scrollbar-track { background: #020412; }
+      .modern ::-webkit-scrollbar-thumb { background: #4f46e5; border-radius: 4px; }
+      .modern ::-webkit-scrollbar-thumb:hover { background: #0ea5e9; }
+      .modern .terminal-scan-line { display: none; }
+      .modern .tutorial-highlight { animation: modern-highlight-pulse 1.5s ease-in-out infinite; border-radius: 12px; }
+      @keyframes modern-highlight-pulse { 0%, 100% { box-shadow: 0 0 20px 8px rgba(14, 165, 233, 0.7); } 50% { box-shadow: 0 0 30px 12px rgba(14, 165, 233, 0.9); } }
+      .modern .typing-caret::after { content: '█'; color: #0ea5e9; animation: caret-blink 1s step-end infinite; }
+      
+      /* Play Page Specific Styles */
+      .modern .play-question-text { font-size: 1.5rem; line-height: 2rem; }
+      .modern .play-option-button {
+          background: rgba(30, 41, 79, 0.5); border: 1px solid rgba(79, 70, 229, 0.4); border-radius: 8px;
+          padding: 1rem; text-align: left; transition: all 0.3s ease;
+          font-size: 1.1rem;
+      }
+      .modern .play-option-button:hover:not(:disabled) {
+          transform: translateY(-2px); border-color: #0ea5e9; background: rgba(14, 165, 233, 0.1);
+      }
+
+      /* Radial Gauge Styles */
+      .modern .gauge-bg { fill: none; stroke: rgba(129, 140, 248, 0.1); }
+      .modern .gauge-fg { fill: none; transform: rotate(-90deg); transform-origin: 50% 50%; animation: gauge-fill 1s ease-out forwards; }
+      
+      /* Live Feed Reactions */
+      .modern .reaction-button {
+        background: rgba(49, 46, 129, 0.4); border: 1px solid rgba(129, 140, 248, 0.3);
+        border-radius: 9999px; padding: 2px 6px; font-size: 12px;
+        transition: all 0.2s ease;
+      }
+      .modern .reaction-button:hover:not(:disabled) {
+        transform: scale(1.1); background: rgba(79, 70, 229, 0.7);
+      }
+      .modern .reaction-button.reacted {
+        background: #4f46e5; border-color: #a5b4fc;
+      }
+      .modern .reaction-button:disabled {
+        cursor: not-allowed;
+      }
+      .modern .reaction-count {
+        font-size: 10px; color: #9ca3af; margin-left: 1px;
+      }
+    </style>
+  <script type="importmap">
+{
+  "imports": {
+    "@google/genai": "https://aistudiocdn.com/@google/genai@^1.25.0",
+    "react/": "https://aistudiocdn.com/react@^19.2.0/",
+    "react": "https://aistudiocdn.com/react@^19.2.0",
+    "react-dom/": "https://aistudiocdn.com/react-dom@^19.2.0/"
+  }
+}
+</script>
+</head>
+  <body>
+    <audio id="bg-music" src="https://cdn.pixabay.com/audio/2023/04/24/audio_3433155ef8.mp3" loop></audio>
+    <div id="root"></div>
+    <div id="audio-container"></div>
+    <script type="module" src="/index.tsx"></script>
+  </body>
+</html>
