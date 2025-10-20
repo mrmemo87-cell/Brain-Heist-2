@@ -28,17 +28,6 @@ import { upsertProfile, getLeaderboard } from './src/lib/db';
 import { supabase } from './src/lib/supabase';
 
 /** Single definition only */
-async function syncToSupabase(u: User) {
-  try {
-    await upsertProfile({
-      username: u.name,
-      batch: String(u.batch).toUpperCase(),
-      xp: u.xp ?? 0,
-    });
-  } catch (e) {
-    console.error('syncToSupabase failed:', e);
-  }
-}
 
 async function syncToSupabase(u: User) {
   try {
