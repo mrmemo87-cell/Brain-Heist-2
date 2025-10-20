@@ -1,24 +1,36 @@
 import { supabase } from './supabase';
 
 export async function upsertProfile(args: { username: string; batch: string; xp?: number }) {
-  let { username, batch, xp = 0 } = args;
-  batch = batch.trim().toUpperCase();
+  const username = (args.username ?? '').toString().trim();
+  const batch = (args.batch ?? '').toString().trim().toUpperCase();
+  const xp = Number.isFinite(args.xp) ? (args.xp as number) : 0;
+  if (!username || !batch) return null;
+
   const { data, error } = await supabase
     .from('profiles')
     .upsert({ username, batch, xp }, { onConflict: 'username' })
     .select();
-  if (error) throw error;
+
+  if (error) {
+    console.error('upsertProfile failed:', error);
+    return null;
+  }
   return data?.[0] ?? null;
 }
 
 export async function getLeaderboard(batch: string, limit = 50) {
-  batch = batch.trim().toUpperCase();
+  const b = (batch ?? '').toString().trim().toUpperCase();
+  if (!b) return [];
   const { data, error } = await supabase
     .from('profiles')
     .select('username, xp, batch')
-    .eq('batch', batch)
+    .eq('batch', b)
     .order('xp', { ascending: false })
     .limit(limit);
-  if (error) throw error;
-  return data ?? [];
+
+  if (error) {
+    console.error('getLeaderboard failed:', error);
+    return [];
+  }
+  return Array.isArray(data) ? data : [];
 }

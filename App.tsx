@@ -15,8 +15,20 @@ import GameOverView from './components/GameOverView';
 import MatrixBackground from './components/MatrixBackground';
 import { Howl, Howler } from 'howler';
 /** ✅ NOTE: because App.tsx is at project root, import from ./src/lib/db */
-import { getLeaderboard, upsertProfile } from './src/lib/db';
+import { upsertProfile, getLeaderboard } from './src/lib/db';
 import { supabase } from './src/lib/supabase';
+
+async function syncToSupabase(u: User) {
+  try {
+    await upsertProfile({
+      username: u.name,
+      batch: String(u.batch).toUpperCase(),
+      xp: u.xp ?? 0,
+    });
+  } catch (e) {
+    console.error('syncToSupabase failed:', e);
+  }
+}
 const soundService = {
   sounds: {
     click: new Howl({ src: ['/sounds/click.mp3'], volume: 0.5 }),
@@ -423,8 +435,20 @@ useEffect(() => {
       }).catch(console.error);
     })
     .subscribe();
-  return () => { supabase.removeChannel(channel); };
-}, [currentUser, allUsers]);
+ return () => {
+    supabase.removeChannel(channel);
+  };
+// ✅ only resubscribe when the batch changes (or user changes)
+}, [currentUser?.batch]); 
+useEffect(() => {
+  if (!currentUser) return;
+  if (currentPage === PageEnum.LEADERBOARD) {
+    getLeaderboard(String(currentUser.batch)).then(rows => {
+      // merge into your local user list, or keep a separate leaderboard list
+      // simplest: just map rows to a display list in the Leaderboard component
+    }).catch(console.error);
+  }
+}, [currentPage, currentUser]);
 
   /** ✅ pull classmates from Supabase */
   useEffect(() => {
