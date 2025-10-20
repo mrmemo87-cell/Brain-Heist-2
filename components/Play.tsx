@@ -1,7 +1,6 @@
-import React, { useState, useEffect, useRef, useCallback } from 'react';
-import type { User, Question, Subject, Item } from '../types';
+import React, { useState, useRef, useCallback } from 'react';
+import type { User, Question, Subject } from '../types';
 import { SUBJECTS, getXpForNextLevel, SHOP_ITEMS } from '../constants';
-// ⬇️ use a namespace/default import so we don't rely on named export resolution
 import * as Gemini from '/src/services/geminiService';
 import { XCircleIcon, GiftIcon } from './ui/Icons';
 import SurpriseBoxModal from './SurpriseBoxModal';
@@ -15,63 +14,161 @@ interface PlayProps {
 const QUESTIONS_TO_FETCH = 5;
 const REFILL_THRESHOLD = 2;
 
-const Play: React.FC<PlayProps> = ({ user, onUpdateUser, playSound }) => {
-  const [selectedSubject, setSelectedSubject] = useState<Subject | null>(null);
-  const [question, setQuestion] = useState<Question | null>(null);
-  const [questionQueue, setQuestionQueue] = useState<Question[]>([]);
-  const [isLoading, setIsLoading] = useState(false);
-  const [isRefilling, setIsRefilling] = useState(false);
-  const [selectedAnswer, setSelectedAnswer] = useState<string | null>(null);
-  const [isAnswered, setIsAnswered] = useState(false);
-  const [sessionStreak, setSessionStreak] = useState(0);
-  const [penaltyLevel, setPenaltyLevel] = useState(0);
+/** Map UI subjects to a concise topic prompt for MCQ gen */
+const SUBJECT_TOPICS: Record<string, string> = {
+  'Science': 'basic science facts (physics/chemistry/biology mixed)',
+  'Maths': 'basic arithmetic and algebra',
+  'English': 'parts of speech and grammar basics',
+  'Global Perspective': 'global citizenship, sustainability, and world issues',
+  'Russian Language': 'Russian language basics (grammar and vocabulary)',
+  'Russian Literature': 'Russian literature classics and authors',
+  'German Language': 'German language basics (grammar and vocabulary)',
+  'Geography': 'world geography (countries, capitals, landforms)',
+  'Kyrgyz Language': 'Kyrgyz language basics (grammar and vocabulary)',
+  'Kyrgyz History': 'Kyrgyz history key events and figures',
+};
 
-  const [isBonusQuestion, setIsBonusQuestion] = useState(false);
-  const [showSurpriseBox, setShowSurpriseBox] = useState(false);
-  const [surpriseGift, setSurpriseGift] = useState<{ name: string; icon: React.ReactNode } | null>(null);
-  const [streakAnimKey, setStreakAnimKey] = useState(0);
+/** Local fallback question banks so app always works offline / no API key */
+const LOCAL_POOL: Record<string, { q: string; opts: string[]; ans: string }[]> = {
+  'Science': [
+    { q: 'Water boils at what temperature at sea level?', opts: ['90°C', '100°C', '120°C', '80°C'], ans: '100°C' },
+    { q: 'Humans primarily breathe in which gas?', opts: ['Oxygen', 'Nitrogen', 'Carbon dioxide', 'Helium'], ans: 'Oxygen' },
+  ],
+  'Maths': [
+    { q: 'What is 7 × 6?', opts: ['36', '40', '42', '48'], ans: '42' },
+    { q: 'Solve: 12 + 15 = ?', opts: ['25', '26', '27', '28'], ans: '27' },
+  ],
+  'English': [
+    { q: 'Which word is a noun?', opts: ['Run', 'Beauty', 'Quickly', 'Silent'], ans: 'Beauty' },
+    { q: 'Pick the adjective:', opts: ['Happily', 'Blue', 'Run', 'And'], ans: 'Blue' },
+  ],
+  'Global Perspective': [
+    { q: 'Which goal is part of the UN SDGs?', opts: ['Space colonization', 'Quality Education', 'Time travel', 'Private armies'], ans: 'Quality Education' },
+    { q: 'Sustainability balances environment, society and ____?', opts: ['Art', 'Economy', 'Weather', 'Sports'], ans: 'Economy' },
+  ],
+  'Russian Language': [
+    { q: 'Какое слово — существительное?', opts: ['Бегать', 'Красивый', 'Книга', 'Быстро'], ans: 'Книга' },
+    { q: 'Выберите глагол:', opts: ['Медленно', 'Письмо', 'Говорить', 'Синий'], ans: 'Говорить' },
+  ],
+  'Russian Literature': [
+    { q: 'Кто автор «Войны и мира»?', opts: ['Гоголь', 'Толстой', 'Пушкин', 'Достоевский'], ans: 'Толстой' },
+    { q: 'Какое произведение написал Достоевский?', opts: ['Евгений Онегин', 'Идиот', 'Мертвые души', 'Отцы и дети'], ans: 'Идиот' },
+  ],
+  'German Language': [
+    { q: 'Welches Wort ist ein Verb?', opts: ['Laufen', 'Blau', 'Schnell', 'Das Haus'], ans: 'Laufen' },
+    { q: 'Artikel für „Auto“?', opts: ['Die', 'Der', 'Das', 'Den'], ans: 'Das' },
+  ],
+  'Geography': [
+    { q: 'Capital of Japan?', opts: ['Seoul', 'Beijing', 'Tokyo', 'Kyoto'], ans: 'Tokyo' },
+    { q: 'The Nile is a ___', opts: ['Desert', 'River', 'Mountain', 'Lake'], ans: 'River' },
+  ],
+  'Kyrgyz Language': [
+    { q: 'Кайсы сөз — зат атооч?', opts: ['Жүгүрүү', 'Кызыл', 'Китеп', 'Тез'], ans: 'Китеп' },
+    { q: 'Кайсысы — этиш?', opts: ['Жакшы', 'Окуу', 'Көк', 'Күндүн'], ans: 'Окуу' },
+  ],
+  'Kyrgyz History': [
+    { q: 'Кайсысы Кыргызстанга байланыштуу?', opts: ['Манас эпосу', 'Ромео жана Джульетта', 'Одиссея', 'Шахнаме'], ans: 'Манас эпосу' },
+    { q: 'Бишкек мурда кандай аталган?', opts: ['Пишпек', 'Ош', 'Кочкор', 'Кулжа'], ans: 'Пишпек' },
+  ],
+  'fun': [
+    { q: 'Best Brain Heist batch? 😉', opts: ['8A', '8B', '8C', 'All of them'], ans: 'All of them' },
+  ],
+};
 
-  const isFetchingRef = useRef(false);
+const pickLocal = (subject: Subject) => {
+  const bank = LOCAL_POOL[subject] ?? LOCAL_POOL['English'];
+  return bank[Math.floor(Math.random() * bank.length)];
+};
 
-  // --- helper: adapt Gemini MCQ -> Question type your app expects
-  const toQuestion = (topic: string, mcq: { question: string; options: string[]; answer: string }): Question => ({
+const normalizeMCQ = (raw: any): { question: string; options: string[]; answer: string } | null => {
+  if (!raw) return null;
+  const q = String(raw.question ?? raw.text ?? '').trim();
+  const opts = Array.isArray(raw.options) ? raw.options.map(String).filter(Boolean) : [];
+  const ans = String(raw.answer ?? raw.correctAnswer ?? '').trim();
+  if (!q || opts.length < 2) return null;
+  const answer = opts.includes(ans) ? ans : opts[0]; // ensure consistency
+  return { question: q, options: opts, answer };
+};
+
+const toQuestion = (topic: string, mcqLike: any): Question => {
+  const m =
+    normalizeMCQ(mcqLike) ??
+    (() => {
+      const f = pickLocal(topic as Subject);
+      return { question: f.q, options: f.opts, answer: f.ans };
+    })();
+
+  return {
     topic,
-    text: mcq.question,
-    options: mcq.options,
-    correctAnswer: mcq.answer,
-  });
+    text: m.question,
+    options: m.options,
+    correctAnswer: m.answer,
+  };
+};
+
+const Play: React.FC<PlayProps> = ({ user, onUpdateUser, playSound }) => {
+  const [selectedSubject, setSelectedSubject] = React.useState<Subject | null>(null);
+  const [question, setQuestion] = React.useState<Question | null>(null);
+  const [questionQueue, setQuestionQueue] = React.useState<Question[]>([]);
+  const [isLoading, setIsLoading] = React.useState(false);
+  const [isRefilling, setIsRefilling] = React.useState(false);
+  const [selectedAnswer, setSelectedAnswer] = React.useState<string | null>(null);
+  const [isAnswered, setIsAnswered] = React.useState(false);
+  const [sessionStreak, setSessionStreak] = React.useState(0);
+  const [penaltyLevel, setPenaltyLevel] = React.useState(0);
+
+  const [isBonusQuestion, setIsBonusQuestion] = React.useState(false);
+  const [showSurpriseBox, setShowSurpriseBox] = React.useState(false);
+  const [surpriseGift, setSurpriseGift] = React.useState<{ name: string; icon: React.ReactNode } | null>(null);
+  const [streakAnimKey, setStreakAnimKey] = React.useState(0);
+  const isFetchingRef = useRef(false);
 
   const fetchQuestionBatch = useCallback(async (subject: Subject) => {
     if (isFetchingRef.current) return;
     isFetchingRef.current = true;
     setIsRefilling(true);
 
-    const topic = subject === 'English' ? 'parts of speech' : subject;
+    const topic = SUBJECT_TOPICS[subject] ?? subject;
 
-    // get N MCQs from Gemini (safe wrapper returns fallback when no API key)
-    const batch = await Promise.all(
-      Array(QUESTIONS_TO_FETCH)
-        .fill(0)
-        .map(() => Gemini.generateMCQ(topic))
-    );
+    try {
+      // get N MCQs (Gemini or fallback)
+      const batch = await Promise.all(
+        Array(QUESTIONS_TO_FETCH)
+          .fill(0)
+          .map(async () => {
+            try {
+              const raw = await Gemini.generateMCQ(topic);
+              return normalizeMCQ(raw) ? raw : pickLocal(subject);
+            } catch {
+              return pickLocal(subject);
+            }
+          })
+      );
 
-    let newQuestions: Question[] = batch
-      .filter(Boolean)
-      .map((mcq) => toQuestion(topic, mcq as any));
+      let newQuestions: Question[] = batch.map((mcq) =>
+        'q' in (mcq as any) ? toQuestion(subject, { question: (mcq as any).q, options: (mcq as any).opts, answer: (mcq as any).ans }) : toQuestion(subject, mcq)
+      );
 
-    // sprinkle a fun one sometimes
-    if (subject === 'English' && Math.random() < 0.25) {
-      const funny = await Gemini.generateMCQ('a funny, absurd, or silly pop-culture topic');
-      if (funny) {
-        const idx = Math.floor(Math.random() * (newQuestions.length + 1));
-        newQuestions.splice(idx, 0, toQuestion('fun', funny as any));
+      // sprinkle a fun bonus sometimes
+      if (Math.random() < 0.25) {
+        try {
+          const funny = await Gemini.generateMCQ('a funny, absurd, or silly pop-culture topic');
+          const insert = toQuestion('fun', normalizeMCQ(funny) ?? pickLocal('fun' as Subject));
+          const idx = Math.floor(Math.random() * (newQuestions.length + 1));
+          newQuestions.splice(idx, 0, insert);
+        } catch {
+          const insert = toQuestion('fun', pickLocal('fun' as Subject));
+          const idx = Math.floor(Math.random() * (newQuestions.length + 1));
+          newQuestions.splice(idx, 0, insert);
+        }
       }
-    }
 
-    setQuestionQueue((prev) => [...prev, ...newQuestions]);
-    isFetchingRef.current = false;
-    setIsRefilling(false);
-    return newQuestions;
+      setQuestionQueue((prev) => [...prev, ...newQuestions]);
+      return newQuestions;
+    } finally {
+      isFetchingRef.current = false;
+      setIsRefilling(false);
+    }
   }, []);
 
   const determineAndAwardGift = () => {
@@ -110,12 +207,11 @@ const Play: React.FC<PlayProps> = ({ user, onUpdateUser, playSound }) => {
       return updated;
     });
 
-    setSurpriseGift({ name: chosen.name, icon: (chosen as any).item?.icon || <GiftIcon className="w-8 h-8" /> });
+    setSurpriseGift({ name: (chosen as any).name, icon: (chosen as any).item?.icon || <GiftIcon className="w-8 h-8" /> });
     setShowSurpriseBox(true);
   };
 
   const loadNextQuestionFromQueue = useCallback(() => {
-    // bonus question chance after streak ≥ 2
     setIsBonusQuestion(sessionStreak >= 2 && Math.random() < 0.2);
 
     setQuestionQueue((prevQueue) => {
@@ -125,13 +221,13 @@ const Play: React.FC<PlayProps> = ({ user, onUpdateUser, playSound }) => {
       setSelectedAnswer(null);
       setIsAnswered(false);
 
-      if (newQueue.length <= REFILL_THRESHOLD && selectedSubject === 'English' && !isRefilling) {
+      if (newQueue.length <= REFILL_THRESHOLD && selectedSubject && !isRefilling) {
         fetchQuestionBatch(selectedSubject);
       }
 
-      if (!nextQuestion && newQueue.length === 0 && !isRefilling) {
+      if (!nextQuestion && newQueue.length === 0 && !isRefilling && selectedSubject) {
         setIsLoading(true);
-        fetchQuestionBatch(selectedSubject!).then((newQs = []) => {
+        fetchQuestionBatch(selectedSubject).then((newQs = []) => {
           const firstNew = newQs.shift();
           setQuestion(firstNew || null);
           setQuestionQueue(newQs);
@@ -151,12 +247,10 @@ const Play: React.FC<PlayProps> = ({ user, onUpdateUser, playSound }) => {
     setQuestion(null);
     setQuestionQueue([]);
 
-    if (subject === 'English') {
-      setIsLoading(true);
-      await fetchQuestionBatch(subject);
-      loadNextQuestionFromQueue(); // pull the first one
-      setIsLoading(false);
-    }
+    setIsLoading(true);
+    await fetchQuestionBatch(subject);
+    loadNextQuestionFromQueue(); // pull the first one
+    setIsLoading(false);
   };
 
   const handleEndSession = () => {
@@ -180,7 +274,6 @@ const Play: React.FC<PlayProps> = ({ user, onUpdateUser, playSound }) => {
       playSound('success');
       newSessionStreak += 1;
       setSessionStreak(newSessionStreak);
-      setStreakAnimKey((k) => k + 1);
       setPenaltyLevel(0);
     } else {
       playSound('error');
@@ -230,7 +323,7 @@ const Play: React.FC<PlayProps> = ({ user, onUpdateUser, playSound }) => {
       if (!wasBonusAndCorrect) {
         loadNextQuestionFromQueue();
       }
-    }, 2500);
+    }, 1200);
   };
 
   const getOptionClass = (option: string) => {
@@ -241,18 +334,11 @@ const Play: React.FC<PlayProps> = ({ user, onUpdateUser, playSound }) => {
     const wasAnsweredCorrectly = selectedAnswer === question?.correctAnswer;
 
     if (wasAnsweredCorrectly) {
-      if (isCorrect) {
-        return 'play-option-button bg-green-500/50 border-green-400 animate-pulse';
-      }
+      if (isCorrect) return 'play-option-button bg-green-500/50 border-green-400 animate-pulse';
     } else {
-      if (isCorrect) {
-        return 'play-option-button bg-green-500/50 border-green-400';
-      }
-      if (isSelected) {
-        return 'play-option-button bg-red-500/50 border-red-400';
-      }
+      if (isCorrect) return 'play-option-button bg-green-500/50 border-green-400';
+      if (isSelected) return 'play-option-button bg-red-500/50 border-red-400';
     }
-
     return 'play-option-button opacity-50';
   };
 
@@ -276,18 +362,6 @@ const Play: React.FC<PlayProps> = ({ user, onUpdateUser, playSound }) => {
     );
   }
 
-  if (selectedSubject !== 'English') {
-    return (
-      <div className="p-6 text-center animate-fade-in">
-        <h2 className="text-2xl font-bold text-cyan-300 mb-4 font-orbitron">&gt; Subject: {selectedSubject}</h2>
-        <p className="text-xl text-gray-400 my-8">// No mission data available for this subject.</p>
-        <button onClick={handleEndSession} className="hacker-button hacker-button-primary">
-          &gt; Back to Subjects
-        </button>
-      </div>
-    );
-  }
-
   return (
     <>
       <div className="p-2 md:p-6 flex flex-col h-full">
@@ -295,7 +369,7 @@ const Play: React.FC<PlayProps> = ({ user, onUpdateUser, playSound }) => {
           <div>
             <h2 className="text-2xl font-bold text-cyan-300 font-orbitron">&gt; Mission: {selectedSubject}</h2>
             <p className="text-sm text-gray-400">
-              Correct Streak:
+              Correct Streak:{' '}
               <span className="font-bold text-green-400 relative ml-2">
                 {sessionStreak}
                 {sessionStreak > 0 && (
@@ -316,50 +390,48 @@ const Play: React.FC<PlayProps> = ({ user, onUpdateUser, playSound }) => {
             <div className="animate-spin rounded-full h-16 w-16 border-t-2 border-b-2 border-cyan-400"></div>
             <p className="ml-4 text-lg">// Establishing secure connection to data node...</p>
           </div>
-        ) : (
-          question && (
-            <div className="animate-fade-in flex-1">
+        ) : question ? (
+          <div className="animate-fade-in flex-1">
+            <div
+              className={`mb-6 p-4 border rounded-lg bg-black/30 transition-all duration-500 ${
+                isBonusQuestion ? 'border-yellow-400 shadow-lg shadow-yellow-500/30' : 'border-cyan-500/50'
+              }`}
+            >
+              <div className="flex justify-between items-center">
+                <p className="text-sm text-pink-400 mb-2 font-orbitron">// Topic: {selectedSubject}</p>
+                {isBonusQuestion && (
+                  <p className="text-sm font-bold text-yellow-300 bg-yellow-900/50 px-2 py-1 rounded animate-pulse">
+                    BONUS ROUND
+                  </p>
+                )}
+              </div>
+              <p className="text-white play-question-text">{question.text}</p>
+            </div>
+
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+              {question.options.map((option) => (
+                <button
+                  key={option}
+                  onClick={() => handleAnswer(option)}
+                  disabled={isAnswered}
+                  className={`transition-all duration-300 ${getOptionClass(option)}`}
+                >
+                  {option}
+                </button>
+              ))}
+            </div>
+
+            {isAnswered && (
               <div
-                className={`mb-6 p-4 border rounded-lg bg-black/30 transition-all duration-500 ${
-                  isBonusQuestion ? 'border-yellow-400 shadow-lg shadow-yellow-500/30' : 'border-cyan-500/50'
+                className={`mt-6 text-center text-2xl font-bold animate-fade-in font-orbitron ${
+                  selectedAnswer === question.correctAnswer ? 'text-green-400' : 'text-red-500'
                 }`}
               >
-                <div className="flex justify-between items-center">
-                  <p className="text-sm text-pink-400 mb-2 font-orbitron">// Topic: {question.topic}</p>
-                  {isBonusQuestion && (
-                    <p className="text-sm font-bold text-yellow-300 bg-yellow-900/50 px-2 py-1 rounded animate-pulse">BONUS ROUND</p>
-                  )}
-                </div>
-                <p className="text-white play-question-text">{question.text}</p>
+                {selectedAnswer === question.correctAnswer ? '// CORRECT' : '// INCORRECT'}
               </div>
-
-              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                {question.options.map((option) => (
-                  <button
-                    key={option}
-                    onClick={() => handleAnswer(option)}
-                    disabled={isAnswered}
-                    className={`transition-all duration-300 ${getOptionClass(option)}`}
-                  >
-                    {option}
-                  </button>
-                ))}
-              </div>
-
-              {isAnswered && (
-                <div
-                  className={`mt-6 text-center text-2xl font-bold animate-fade-in font-orbitron ${
-                    selectedAnswer === question.correctAnswer ? 'text-green-400' : 'text-red-500'
-                  }`}
-                >
-                  {selectedAnswer === question.correctAnswer ? '// CORRECT' : '// INCORRECT'}
-                </div>
-              )}
-            </div>
-          )
-        )}
-
-        {!isLoading && !question && (
+            )}
+          </div>
+        ) : (
           <div className="flex-1 flex justify-center items-center text-center">
             <p className="text-xl text-gray-400 my-8">// Mission data corrupted. Re-establishing link...</p>
           </div>
