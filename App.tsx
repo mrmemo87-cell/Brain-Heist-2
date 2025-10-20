@@ -2,7 +2,6 @@ import React, { useState, useEffect, useCallback } from 'react';
 import type { User, Page, Item, LiveEvent, HackResult, Batch } from './types';
 import { Page as PageEnum } from './types';
 import { SHOP_ITEMS, INITIAL_EVENTS, HACK_SUCCESS_MESSAGES, HACK_FAIL_MESSAGES, ITEM_ACTIVATION_MESSAGES } from './constants';
-
 import Login from './components/Login';
 import Layout from './components/Layout';
 import Profile from './components/Profile';
@@ -14,12 +13,10 @@ import HackResultModal from './components/HackResultModal';
 import ProjectorView from './components/ProjectorView';
 import GameOverView from './components/GameOverView';
 import MatrixBackground from './components/MatrixBackground';
-
 import { Howl, Howler } from 'howler';
-
 /** ✅ NOTE: because App.tsx is at project root, import from ./src/lib/db */
 import { getLeaderboard, upsertProfile } from './src/lib/db';
-
+import { supabase } from './src/lib/supabase';
 const soundService = {
   sounds: {
     click: new Howl({ src: ['/sounds/click.mp3'], volume: 0.5 }),
@@ -396,7 +393,6 @@ const App: React.FC = () => {
     syncToSupabase(currentUser);
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [currentUser?.xp]);
-import { supabase } from './src/lib/supabase';
 
 useEffect(() => {
   if (!currentUser) return;
@@ -531,14 +527,42 @@ useEffect(() => {
         onToggleTheme={() => setTheme(t => t === 'classic' ? 'modern' : 'classic')}
       >
         {(() => {
-          switch (currentPage) {
-            case PageEnum.PROFILE: return <Profile user={currentUser} onUpdateUser={handleUpdateUser} onActivateItem={handleActivateItem} theme={theme} />;
-            case PageEnum.LEADERBOARD: return <Leaderboard allUsers={allUsers} currentUser={currentUser} liveEvents={liveEvents} onHack={handleHack} onReact={handleReact} theme={theme} />;
-            case PageEnum.PLAY: return <Play user={currentUser} onUpdateUser={handleUpdateUser} playSound={(s) => soundService.play(s)} />;
-            case PageEnum.SHOP: return <Shop user={currentUser} onUpdateUser={handleUpdateUser} items={SHOP_ITEMS} />;
-            default: return null;
-          }
-        })()}
+  switch (currentPage) {
+    case PageEnum.PROFILE:
+      return (
+        <Profile
+          user={currentUser}
+          onUpdateUser={handleUpdateUser}
+          onActivateItem={handleActivateItem}
+          theme={theme}
+        />
+      );
+    case PageEnum.LEADERBOARD:
+      return (
+        <Leaderboard
+          allUsers={allUsers}
+          currentUser={currentUser}
+          liveEvents={liveEvents}
+          onHack={handleHack}
+          onReact={handleReact}
+          theme={theme}
+        />
+      );
+    case PageEnum.PLAY:
+      return (
+        <Play
+          user={currentUser}
+          onUpdateUser={handleUpdateUser}
+          playSound={(s) => soundService.play(s)}
+        />
+      );
+    // Use PageEnum since "Page" is a type
+    case PageEnum.SHOP:
+      return <Shop user={currentUser} onUpdateUser={handleUpdateUser} items={SHOP_ITEMS} />;
+    default:
+      return null;
+  }
+})()}
       </Layout>
       {showTutorial && <Tutorial username={currentUser.name} onClose={() => { setShowTutorial(false); setTutorialHighlight(null); localStorage.setItem('brain-heist-tutorial-complete', 'true'); }} highlightStep={setTutorialHighlight} />}
       {hackResult && <HackResultModal result={hackResult} onClose={() => setHackResult(null)} />}
