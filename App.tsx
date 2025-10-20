@@ -9,7 +9,7 @@ import {
   ITEM_ACTIVATION_MESSAGES,
 } from './constants';
 
-import Login from './components/Login';
+import Login from '@/components/Login';
 import Layout from './components/Layout';
 import Profile from './components/Profile';
 import Leaderboard from './components/Leaderboard';
@@ -24,8 +24,8 @@ import MatrixBackground from './components/MatrixBackground';
 import { Howl, Howler } from 'howler';
 
 /** ✅ NOTE: because App.tsx is at project root, keep these relative imports */
-import { upsertProfile, getLeaderboard } from './src/lib/db';
-import { supabase } from './src/lib/supabase';
+import { upsertProfile, getLeaderboard } from '@/lib/db';
+import { supabase } from '@/lib/supabase';
 
 /** Single definition only */
 

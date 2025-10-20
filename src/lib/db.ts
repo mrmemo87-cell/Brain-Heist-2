@@ -1,4 +1,4 @@
-import { supabase } from './supabase';
+import { supabase } from '@/lib/supabase';
 
 export async function upsertProfile(args: { username: string; batch: string; xp?: number }) {
   const username = (args.username ?? '').toString().trim();
