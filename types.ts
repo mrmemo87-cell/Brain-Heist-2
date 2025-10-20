@@ -49,6 +49,8 @@ export interface User {
       expiry: number | null;
     }
   };
+  lastHackedTimestamp?: number;
+  lastActiveTimestamp?: number;
 }
 
 export interface Question {

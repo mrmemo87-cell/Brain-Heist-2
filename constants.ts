@@ -1,14 +1,6 @@
 import React from 'react';
-import type { User, Item, LiveEvent, Subject } from './types';
+import type { Item, LiveEvent, Subject, Batch } from './types';
 import { ShieldIcon, ZapIcon, ImageIcon, TerminalIcon } from './components/ui/Icons';
-
-export const USERS: User[] = [
-  { id: 'u1', name: 'Cipher', avatar: 'https://i.pravatar.cc/150?u=cipher', bio: 'Cracking codes and climbing ranks.', batch: '8A', xp: 1250, level: 5, creds: 500, streak: 3, hackingSkill: 10, securityLevel: 5, stamina: { current: 50, max: 50 }, inventory: { 'shield-1': 1 }, activeEffects: { shielded: false, xpBoost: { active: false, expiry: null } } },
-  { id: 'u2', name: 'Glitch', avatar: 'https://i.pravatar.cc/150?u=glitch', bio: 'In the system, I am the ghost.', batch: '8B', xp: 2500, level: 7, creds: 1200, streak: 10, hackingSkill: 15, securityLevel: 10, stamina: { current: 50, max: 50 }, inventory: { 'booster-1': 1 }, activeEffects: { shielded: false, xpBoost: { active: false, expiry: null } } },
-  { id: 'u3', name: 'Neon', avatar: 'https://i.pravatar.cc/150?u=neon', bio: 'Bright ideas, faster execution.', batch: '8A', xp: 800, level: 4, creds: 350, streak: 1, hackingSkill: 5, securityLevel: 5, stamina: { current: 50, max: 50 }, inventory: {}, activeEffects: { shielded: false, xpBoost: { active: false, expiry: null } } },
-  { id: 'u4', name: 'Zero', avatar: 'https://i.pravatar.cc/150?u=zero', bio: 'From nothing, everything.', batch: '8C', xp: 3100, level: 8, creds: 2000, streak: 15, hackingSkill: 20, securityLevel: 15, stamina: { current: 60, max: 60 }, inventory: { 'shield-1': 1, 'booster-1': 1 }, activeEffects: { shielded: false, xpBoost: { active: false, expiry: null } } },
-  { id: 'u5', name: 'Sobbi', avatar: 'https://i.pravatar.cc/150?u=sobbi', bio: 'Admin & Instructor', batch: '8A', xp: 99999, level: 100, creds: 99999, streak: 99, hackingSkill: 100, securityLevel: 100, stamina: { current: 100, max: 100 }, inventory: {}, activeEffects: { shielded: false, xpBoost: { active: false, expiry: null } } },
-];
 
 export const SHOP_ITEMS: Item[] = [
   { id: 'shield-1', name: 'Firewall Shield', description: 'Massively boosts your Security Level against one incoming hack attempt. Consumed after use.', price: 200, type: 'shield', icon: React.createElement(ShieldIcon, { className: "w-8 h-8" }) },
@@ -24,6 +16,8 @@ export const INITIAL_EVENTS: LiveEvent[] = [
 ]
 
 export const SUBJECTS: Subject[] = ['Science', 'Maths', 'English', 'Global Perspective', 'Russian Language', 'Russian Literature', 'German Language', 'Geography', 'Kyrgyz Language', 'Kyrgyz History'];
+
+export const AVAILABLE_BATCHES: Batch[] = ['8A', '8B', '8C'];
 
 export const getXpForNextLevel = (level: number): number => Math.ceil(100 * Math.pow(level, 1.5));
 

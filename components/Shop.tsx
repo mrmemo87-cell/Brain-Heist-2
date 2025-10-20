@@ -3,7 +3,7 @@ import type { User, Item } from '../types';
 
 interface ShopProps {
   user: User;
-  onUpdateUser: (updatedUser: User) => void;
+  onUpdateUser: (userId: string, updateFn: (user: User) => User) => void;
   items: Item[];
 }
 
@@ -12,6 +12,7 @@ const Shop: React.FC<ShopProps> = ({ user, onUpdateUser, items }) => {
 
   const handleBuy = (item: Item) => {
     setFeedback(null);
+    // Perform pre-flight checks on UI state to prevent obviously invalid actions
     if (user.creds < item.price) {
       setFeedback({ message: 'Error: Insufficient funds!', type: 'error' });
       return;
@@ -20,22 +21,29 @@ const Shop: React.FC<ShopProps> = ({ user, onUpdateUser, items }) => {
         setFeedback({ message: `Error: Requires Level ${item.levelRequirement}`, type: 'error' });
         return;
     }
-    
     if (user.inventory[item.id] > 0 && item.type !== 'upgrade') {
       setFeedback({ message: 'Error: Item already in inventory.', type: 'error' });
       return;
     }
 
-    const newInventory = { ...user.inventory };
-    newInventory[item.id] = (newInventory[item.id] || 0) + 1;
+    onUpdateUser(user.id, (currentUserState) => {
+        // Re-validate inside the atomic update to ensure correctness
+        if (currentUserState.creds < item.price) {
+            setFeedback({ message: 'Error: Insufficient funds!', type: 'error' });
+            return currentUserState; // Abort update
+        }
 
-    const updatedUser = {
-      ...user,
-      creds: user.creds - item.price,
-      inventory: newInventory,
-    };
-    onUpdateUser(updatedUser);
-    setFeedback({ message: `Success: ${item.name} acquired.`, type: 'success' });
+        const newInventory = { ...currentUserState.inventory };
+        newInventory[item.id] = (newInventory[item.id] || 0) + 1;
+
+        setFeedback({ message: `Success: ${item.name} acquired.`, type: 'success' });
+
+        return {
+          ...currentUserState,
+          creds: currentUserState.creds - item.price,
+          inventory: newInventory,
+        };
+    });
     
     setTimeout(() => setFeedback(null), 3000);
   };

@@ -1,17 +1,18 @@
 import React, { useState } from 'react';
 import type { User, Item } from '../types';
 import { getXpForNextLevel, SHOP_ITEMS } from '../constants';
-import { TerminalIcon, ShieldIcon, ZapIcon } from './ui/Icons';
+import { TerminalIcon, ShieldIcon, ZapIcon, PencilIcon } from './ui/Icons';
 import RadialGauge from './ui/RadialGauge';
+import AvatarSelectionModal from './AvatarSelectionModal';
 
 interface ProfileProps {
   user: User;
-  onUpdateUser: (updatedUser: User) => void;
+  onUpdateUser: (userId: string, updateFn: (user: User) => User) => void;
   onActivateItem: (item: Item) => void;
   theme: 'classic' | 'modern';
 }
 
-const StatBar: React.FC<{ value: number; maxValue?: number; label: string; icon: React.ReactNode; colorClass: string; }> = ({ value, maxValue, label, icon, colorClass }) => {
+const StatBar: React.FC<{ value: number; maxValue?: number; label:string; icon: React.ReactNode; colorClass: string; }> = ({ value, maxValue, label, icon, colorClass }) => {
     const percentage = maxValue ? (value / maxValue) * 100 : 100;
     return (
         <div>
@@ -61,16 +62,27 @@ const XpBar: React.FC<{ currentXp: number; level: number }> = ({ currentXp, leve
 const Profile: React.FC<ProfileProps> = ({ user, onUpdateUser, onActivateItem, theme }) => {
     const [bio, setBio] = useState(user.bio);
     const [isEditing, setIsEditing] = useState(false);
+    const [isAvatarModalOpen, setIsAvatarModalOpen] = useState(false);
 
     const handleBioSave = () => {
-        onUpdateUser({ ...user, bio });
+        onUpdateUser(user.id, (currentUserState) => ({ ...currentUserState, bio }));
         setIsEditing(false);
     }
 
   return (
+    <>
     <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
         <div className="md:col-span-1 flex flex-col items-center p-6 hacker-box">
-            <img src={user.avatar} alt={user.name} className="w-32 h-32 md:w-40 md:h-40 rounded-full border-4 border-cyan-400 shadow-lg shadow-cyan-500/30 mb-4"/>
+            <div className="relative group w-32 h-32 md:w-40 md:h-40 mb-4">
+                <img src={user.avatar} alt={user.name} className="w-full h-full rounded-full border-4 border-cyan-400 shadow-lg shadow-cyan-500/30"/>
+                <div 
+                    onClick={() => setIsAvatarModalOpen(true)}
+                    className="absolute inset-0 bg-black/70 flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity rounded-full cursor-pointer"
+                >
+                    <PencilIcon className="w-10 h-10 text-white" />
+                </div>
+            </div>
+
             <h3 className="text-3xl font-bold font-orbitron">{user.name}</h3>
             <p className="text-gray-400">{user.batch}</p>
             
@@ -134,6 +146,16 @@ const Profile: React.FC<ProfileProps> = ({ user, onUpdateUser, onActivateItem, t
             </div>
         </div>
     </div>
+    {isAvatarModalOpen && (
+        <AvatarSelectionModal 
+            onClose={() => setIsAvatarModalOpen(false)}
+            onAvatarSelect={(newAvatarUrl) => {
+                onUpdateUser(user.id, (currentUserState) => ({ ...currentUserState, avatar: newAvatarUrl }));
+                setIsAvatarModalOpen(false);
+            }}
+        />
+    )}
+    </>
   );
 };
 

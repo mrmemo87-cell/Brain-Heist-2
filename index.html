@@ -35,6 +35,21 @@
       .animate-shake-error { animation: shake-error 0.5s ease-in-out; }
       @keyframes modal-glitch { 0% { transform: translate(0); } 20% { transform: translate(-3px, 3px); } 40% { transform: translate(-3px, -3px); } 60% { transform: translate(3px, 3px); } 80% { transform: translate(3px, -3px); } 100% { transform: translate(0); } }
       .animate-modal-glitch { animation: modal-glitch 0.2s linear 3; }
+      @keyframes qr-pulse {
+        0%, 100% { box-shadow: 0 0 10px 2px rgba(0, 232, 124, 0.4); }
+        50% { box-shadow: 0 0 20px 5px rgba(0, 232, 124, 0.7); }
+      }
+      .animate-qr-pulse { animation: qr-pulse 3s ease-in-out infinite; }
+      @keyframes winner-reveal {
+        from { opacity: 0; transform: scale(0.8) translateY(50px); filter: blur(10px); }
+        to { opacity: 1; transform: scale(1) translateY(0); filter: blur(0px); }
+      }
+      .animate-winner-reveal { animation: winner-reveal 0.8s cubic-bezier(0.2, 1, 0.3, 1) forwards; }
+      @keyframes streak-pop {
+        0% { transform: translateY(0) scale(1); opacity: 1; }
+        100% { transform: translateY(-30px) scale(1.5); opacity: 0; }
+      }
+      .animate-streak-pop { animation: streak-pop 0.7s ease-out forwards; }
 
       /* --- CLASSIC THEME --- */
 
@@ -78,7 +93,6 @@
       @keyframes modern-grid { 0% { background-position: 0 0; } 100% { background-position: 50px 50px; } }
       @keyframes holographic-in { from { opacity: 0; transform: scale(0.9) translateY(20px); filter: blur(10px); } to { opacity: 1; transform: scale(1) translateY(0); filter: blur(0); } }
       @keyframes glare-effect { 0% { transform: translateX(-100%) skewX(-30deg); } 100% { transform: translateX(200%) skewX(-30deg); } }
-      @keyframes gauge-fill { to { stroke-dashoffset: 0; } }
 
       body.modern {
         font-family: 'Roboto Mono', 'Orbitron', monospace;
@@ -155,8 +169,17 @@
       }
 
       /* Radial Gauge Styles */
-      .modern .gauge-bg { fill: none; stroke: rgba(129, 140, 248, 0.1); }
-      .modern .gauge-fg { fill: none; transform: rotate(-90deg); transform-origin: 50% 50%; animation: gauge-fill 1s ease-out forwards; }
+      .modern .gauge-bg {
+          fill: none;
+          stroke: rgba(129, 140, 248, 0.15);
+      }
+      .modern .gauge-fg {
+          fill: none;
+          transition: stroke-dashoffset 1.5s cubic-bezier(0.19, 1, 0.22, 1);
+      }
+      .modern .text-shadow-glow {
+        text-shadow: 0 0 5px currentColor, 0 0 10px currentColor, 0 0 15px rgba(255, 255, 255, 0.5);
+      }
       
       /* Live Feed Reactions */
       .modern .reaction-button {
@@ -183,13 +206,15 @@
     "@google/genai": "https://aistudiocdn.com/@google/genai@^1.25.0",
     "react/": "https://aistudiocdn.com/react@^19.2.0/",
     "react": "https://aistudiocdn.com/react@^19.2.0",
-    "react-dom/": "https://aistudiocdn.com/react-dom@^19.2.0/"
+    "react-dom/": "https://aistudiocdn.com/react-dom@^19.2.0/",
+    "howler": "https://aistudiocdn.com/howler@^2.2.4"
   }
 }
 </script>
 </head>
   <body>
     <audio id="bg-music" src="https://cdn.pixabay.com/audio/2023/04/24/audio_3433155ef8.mp3" loop></audio>
+    <audio id="projector-music" src="https://cdn.pixabay.com/audio/2022/11/22/audio_731a5518b1.mp3" loop></audio>
     <div id="root"></div>
     <div id="audio-container"></div>
     <script type="module" src="/index.tsx"></script>
