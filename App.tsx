@@ -1,7 +1,14 @@
 import React, { useState, useEffect, useCallback } from 'react';
 import type { User, Page, Item, LiveEvent, HackResult, Batch } from './types';
 import { Page as PageEnum } from './types';
-import { SHOP_ITEMS, INITIAL_EVENTS, HACK_SUCCESS_MESSAGES, HACK_FAIL_MESSAGES, ITEM_ACTIVATION_MESSAGES } from './constants';
+import {
+  SHOP_ITEMS,
+  INITIAL_EVENTS,
+  HACK_SUCCESS_MESSAGES,
+  HACK_FAIL_MESSAGES,
+  ITEM_ACTIVATION_MESSAGES,
+} from './constants';
+
 import Login from './components/Login';
 import Layout from './components/Layout';
 import Profile from './components/Profile';
@@ -13,21 +20,21 @@ import HackResultModal from './components/HackResultModal';
 import ProjectorView from './components/ProjectorView';
 import GameOverView from './components/GameOverView';
 import MatrixBackground from './components/MatrixBackground';
+
 import { Howl, Howler } from 'howler';
-/** ✅ NOTE: because App.tsx is at project root, import from ./src/lib/db */
-import { upsertProfile, getLeaderboard } from './src/lib/db';
-import { supabase } from './src/lib/supabase';
+
+/** ✅ NOTE: because App.tsx is at project root, keep these relative imports */
 import { upsertProfile, getLeaderboard } from './src/lib/db';
 import { supabase } from './src/lib/supabase';
 
+/** Single definition only */
 async function syncToSupabase(u: User) {
   try {
-    const res = await upsertProfile({
+    await upsertProfile({
       username: u.name,
       batch: String(u.batch).toUpperCase(),
       xp: u.xp ?? 0,
     });
-    if (!res) console.warn('syncToSupabase: upsert returned null');
   } catch (e) {
     console.error('syncToSupabase failed:', e);
   }
