@@ -1,13 +1,13 @@
 import React, { useState, useEffect, useCallback } from 'react';
-import type { User, Page, Item, LiveEvent, HackResult, Batch } from './types';
-import { Page as PageEnum } from './types';
+import type { User, Page, Item, LiveEvent, HackResult, Batch } from '@/types';
+import { Page as PageEnum } from '@/types';
 import {
   SHOP_ITEMS,
   INITIAL_EVENTS,
   HACK_SUCCESS_MESSAGES,
   HACK_FAIL_MESSAGES,
   ITEM_ACTIVATION_MESSAGES,
-} from '../constants';
+} from '@/constants';
 
 import Login from '@/components/Login';
 import Layout from '@/components/Layout';

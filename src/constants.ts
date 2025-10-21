@@ -1,6 +1,6 @@
 import React from 'react';
-import type { Item, LiveEvent, Subject, Batch } from './types';
-import { ShieldIcon, ZapIcon, ImageIcon, TerminalIcon } from './src/components/ui/Icons';
+import type { Item, LiveEvent, Subject, Batch } from '@/types';
+import { ShieldIcon, ZapIcon, ImageIcon, TerminalIcon } from '@/components/ui/Icons';
 
 export const SHOP_ITEMS: Item[] = [
   { id: 'shield-1', name: 'Firewall Shield', description: 'Massively boosts your Security Level against one incoming hack attempt. Consumed after use.', price: 200, type: 'shield', icon: React.createElement(ShieldIcon, { className: "w-8 h-8" }) },

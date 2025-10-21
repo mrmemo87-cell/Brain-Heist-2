@@ -1,7 +1,7 @@
 // components/login.tsx
 import React, { useState } from 'react';
 import type { Batch } from '../types';
-import { AVAILABLE_BATCHES } from '../../constants';
+import { AVAILABLE_BATCHES } from '@/constants';
 import { supabase } from '@/lib/supabase';
 
 interface LoginProps {

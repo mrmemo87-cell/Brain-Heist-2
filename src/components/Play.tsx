@@ -1,7 +1,7 @@
 import React, { useState, useRef, useCallback } from 'react';
 import type { User, Question, Subject } from '../types';
-import { SUBJECTS, getXpForNextLevel, SHOP_ITEMS } from '../../constants';
-import * as Gemini from '/src/services/geminiService';
+import { SUBJECTS, getXpForNextLevel, SHOP_ITEMS } from '@/constants';
+import * as Gemini from '@/services/geminiService';
 import { XCircleIcon, GiftIcon } from './ui/Icons';
 import SurpriseBoxModal from './SurpriseBoxModal';
 

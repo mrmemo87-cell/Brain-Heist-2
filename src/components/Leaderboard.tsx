@@ -2,7 +2,7 @@ import React, { useState, useMemo, useEffect } from 'react';
 import type { User, LiveEvent, LiveEventType } from '../types';
 import RadialGauge from './ui/RadialGauge'; // Import the new component
 import { ShieldIcon } from './ui/Icons';
-import { AVAILABLE_BATCHES } from '../../constants';
+import { AVAILABLE_BATCHES } from '@/constants';
 
 // MiniProfileModal Component
 const MiniProfileModal: React.FC<{ user: User; onClose: () => void; theme: 'classic' | 'modern' }> = ({ user, onClose, theme }) => {
