@@ -11,6 +11,7 @@ interface LoginProps {
 const Login: React.FC<LoginProps> = ({ onLogin }) => {
   const [username, setUsername] = useState('');
   const [batch, setBatch] = useState<Batch>(AVAILABLE_BATCHES[0]);
+  const [passcode, setPasscode] = useState('');               // ← NEW
   const [error, setError] = useState<string | null>(null);
   const [isShaking, setIsShaking] = useState(false);
   const [loading, setLoading] = useState(false);
@@ -20,24 +21,26 @@ const Login: React.FC<LoginProps> = ({ onLogin }) => {
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     const uname = username.trim();
+    const pcode = passcode.trim();
     if (!uname) return;
+    if (pcode.length < 4) { setError('Passcode must be 4+ chars.'); shake(); return; }
 
     setLoading(true); setError(null);
     try {
       // ensure session (anon or email)
-const { data: s } = await supabase.auth.getSession();
-if (!s.session) {
-  const { error } = await supabase.auth.signInAnonymously();
-  if (error) throw error;
-}
+      const { data: s } = await supabase.auth.getSession();
+      if (!s.session) {
+        const { error } = await supabase.auth.signInAnonymously();
+        if (error) throw error;
+      }
 
-const { error: claimErr } = await supabase.rpc('rpc_claim_with_passcode', {
-  p_username: username.trim(),
-  p_batch: batch,
-  p_passcode: passcode.trim(),
-});
-if (claimErr) throw claimErr;
-
+      // claim with passcode (creates or re-binds safely)
+      const { error: claimErr } = await supabase.rpc('rpc_claim_with_passcode', {
+        p_username: uname,
+        p_batch: batch,
+        p_passcode: pcode,
+      });
+      if (claimErr) throw claimErr;
 
       const maybe = onLogin(uname, batch);
       if (maybe) { setError(maybe); shake(); }
@@ -67,6 +70,20 @@ if (claimErr) throw claimErr;
           <select id="batch" value={batch} onChange={(e) => setBatch(e.target.value as Batch)} className="w-full hacker-input">
             {AVAILABLE_BATCHES.map((b) => (<option key={b} value={b}>{b}</option>))}
           </select>
+        </div>
+
+        {/* NEW: passcode */}
+        <div>
+          <label htmlFor="passcode" className="block text-sm font-medium text-gray-300 mb-2">Passcode:</label>
+          <input
+            id="passcode"
+            type="password"
+            value={passcode}
+            onChange={(e) => { setPasscode(e.target.value); if (error) setError(null); }}
+            className="w-full hacker-input"
+            placeholder="4–8 chars"
+            required
+          />
         </div>
 
         {error && <p className="text-red-400 text-sm text-center -my-3 p-2 bg-red-900/50 border border-red-500 rounded">{error}</p>}
