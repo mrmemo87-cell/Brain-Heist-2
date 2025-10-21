@@ -33,7 +33,7 @@ const Login: React.FC<LoginProps> = ({ onLogin }) => {
 
       // insert-if-missing + claim + set batch
       const { error: claimErr } = await supabase.rpc('rpc_claim_profile', {
-        p_username: uname,
+        p_username: username,
         p_batch: batch,
       });
       if (claimErr) throw claimErr;
