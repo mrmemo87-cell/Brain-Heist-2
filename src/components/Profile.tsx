@@ -1,6 +1,6 @@
 import React, { useState } from 'react';
 import type { User, Item } from '../types';
-import { getXpForNextLevel, SHOP_ITEMS } from '../constants';
+import { getXpForNextLevel, SHOP_ITEMS } from '../../constants';
 import { TerminalIcon, ShieldIcon, ZapIcon, PencilIcon } from './ui/Icons';
 import RadialGauge from './ui/RadialGauge';
 import AvatarSelectionModal from './AvatarSelectionModal';

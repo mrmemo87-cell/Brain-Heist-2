@@ -7,19 +7,19 @@ import {
   HACK_SUCCESS_MESSAGES,
   HACK_FAIL_MESSAGES,
   ITEM_ACTIVATION_MESSAGES,
-} from './constants';
+} from '../constants';
 
 import Login from '@/components/Login';
-import Layout from './components/Layout';
-import Profile from './components/Profile';
-import Leaderboard from './components/Leaderboard';
-import Play from './components/Play';
-import Shop from './components/Shop';
-import Tutorial from './components/Tutorial';
-import HackResultModal from './components/HackResultModal';
-import ProjectorView from './components/ProjectorView';
-import GameOverView from './components/GameOverView';
-import MatrixBackground from './components/MatrixBackground';
+import Layout from '@/components/Layout';
+import Profile from '@/components/Profile';
+import Leaderboard from '@/components/Leaderboard';
+import Play from '@/components/Play';
+import Shop from '@/components/Shop';
+import Tutorial from '@/components/Tutorial';
+import HackResultModal from '@/components/HackResultModal';
+import ProjectorView from '@/components/ProjectorView';
+import GameOverView from '@/components/GameOverView';
+import MatrixBackground from '@/components/MatrixBackground';
 
 import { Howl, Howler } from 'howler';
 
