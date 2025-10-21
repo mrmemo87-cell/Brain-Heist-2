@@ -15,43 +15,34 @@ const Login: React.FC<LoginProps> = ({ onLogin }) => {
   const [isShaking, setIsShaking] = useState(false);
   const [loading, setLoading] = useState(false);
 
-  const shake = () => {
-    setIsShaking(true);
-    setTimeout(() => setIsShaking(false), 500);
-  };
+  const shake = () => { setIsShaking(true); setTimeout(() => setIsShaking(false), 500); };
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!username.trim()) return;
+    const uname = username.trim();
+    if (!uname) return;
 
-    setLoading(true);
-    setError(null);
-
+    setLoading(true); setError(null);
     try {
-      // Ensure we have a session (anonymous)
-      const { data: sessionCheck } = await supabase.auth.getSession();
-      if (!sessionCheck.session) {
+      // ensure session (anonymous)
+      const { data: s } = await supabase.auth.getSession();
+      if (!s.session) {
         const { error: anonErr } = await supabase.auth.signInAnonymously();
         if (anonErr) throw anonErr;
       }
 
-      // Insert-if-missing + claim + set batch (RPC must be updated as we discussed)
+      // insert-if-missing + claim + set batch
       const { error: claimErr } = await supabase.rpc('rpc_claim_profile', {
-        p_username: username.trim(),
+        p_username: uname,
         p_batch: batch,
       });
       if (claimErr) throw claimErr;
 
-      // Continue app flow
-      const maybeError = onLogin(username.trim(), batch);
-      if (maybeError) {
-        setError(maybeError);
-        shake();
-        return;
-      }
+      const maybe = onLogin(uname, batch);
+      if (maybe) { setError(maybe); shake(); }
     } catch (err: any) {
-      console.error('[login] auth/claim error:', err);
-      setError(err?.message || 'Login failed. Try again.');
+      console.error('[login]', err);
+      setError(err?.message ?? 'Login failed.');
       shake();
     } finally {
       setLoading(false);
@@ -60,7 +51,7 @@ const Login: React.FC<LoginProps> = ({ onLogin }) => {
 
   return (
     <div className={`w-full max-w-md hacker-box p-8 transition-transform duration-500 ${isShaking ? 'animate-shake-error' : ''} animate-fade-in`}>
-      <div className="relative"><div className="terminal-scan-line"></div></div>
+      <div className="relative"><div className="terminal-scan-line" /></div>
       <h1 className="text-4xl sm:text-5xl font-bold text-center text-green-400 mb-2 font-orbitron animate-text-glitch">BRAIN HEIST</h1>
       <p className="text-center text-cyan-300 mb-8">// Agent Authentication Required</p>
 
@@ -77,7 +68,7 @@ const Login: React.FC<LoginProps> = ({ onLogin }) => {
           </select>
         </div>
 
-        {error && (<p className="text-red-400 text-sm text-center -my-3 p-2 bg-red-900/50 border border-red-500 rounded">{error}</p>)}
+        {error && <p className="text-red-400 text-sm text-center -my-3 p-2 bg-red-900/50 border border-red-500 rounded">{error}</p>}
 
         <button type="submit" disabled={loading} className="w-full font-bold text-lg py-3 hacker-button hacker-button-primary disabled:opacity-60">
           {loading ? '> Linking Agent…' : '> Access Terminal'}
@@ -106,4 +97,3 @@ const Login: React.FC<LoginProps> = ({ onLogin }) => {
 };
 
 export default Login;
-
