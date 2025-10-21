@@ -24,19 +24,20 @@ const Login: React.FC<LoginProps> = ({ onLogin }) => {
 
     setLoading(true); setError(null);
     try {
-      // ensure session (anonymous)
-      const { data: s } = await supabase.auth.getSession();
-      if (!s.session) {
-        const { error: anonErr } = await supabase.auth.signInAnonymously();
-        if (anonErr) throw anonErr;
-      }
+      // ensure session (anon or email)
+const { data: s } = await supabase.auth.getSession();
+if (!s.session) {
+  const { error } = await supabase.auth.signInAnonymously();
+  if (error) throw error;
+}
 
-      // insert-if-missing + claim + set batch
-      const { error: claimErr } = await supabase.rpc('rpc_claim_profile', {
-        p_username: username,
-        p_batch: batch,
-      });
-      if (claimErr) throw claimErr;
+const { error: claimErr } = await supabase.rpc('rpc_claim_with_passcode', {
+  p_username: username.trim(),
+  p_batch: batch,
+  p_passcode: passcode.trim(),
+});
+if (claimErr) throw claimErr;
+
 
       const maybe = onLogin(uname, batch);
       if (maybe) { setError(maybe); shake(); }
