@@ -147,45 +147,33 @@ const Play: React.FC<PlayProps> = ({ user, onUpdateUser, playSound }) => {
   if (isFetchingRef.current) return;
   isFetchingRef.current = true;
   setIsRefilling(true);
-
   try {
-    // 1) try DB first
-    const dbQs = await getQuestionsBySubject(subject, QUESTIONS_TO_FETCH);
-    if (dbQs?.length) {
-      setQuestionQueue((prev) => [...prev, ...dbQs]);
-      return dbQs;
+    // 1) pull from DB
+    const rows = await getQuestions(subject, QUESTIONS_TO_FETCH);
+    const fromDb = rows.map(r => ({
+      topic: subject,
+      text: String(r.prompt ?? ''),
+      options: (Array.isArray(r.options) ? r.options : []).map(String),
+      correctAnswer: (() => {
+        const idx = Number(r.correct_index ?? 0);
+        const opts = Array.isArray(r.options) ? r.options : [];
+        return String(opts[idx] ?? opts[0] ?? '');
+      })(),
+    }));
+
+    // 2) if DB thin, backfill with local
+    while (fromDb.length < QUESTIONS_TO_FETCH) {
+      const fallback = pickLocal(subject as Subject);
+      fromDb.push({
+        topic: subject,
+        text: fallback.q,
+        options: fallback.opts,
+        correctAnswer: fallback.ans,
+      });
     }
 
-    // 2) fallback to Gemini (if present) or local pool
-    const topic = SUBJECT_TOPICS[subject] ?? subject;
-
-    const batch = await Promise.all(
-      Array(QUESTIONS_TO_FETCH).fill(0).map(async () => {
-        try {
-          const raw = await Gemini.generateMCQ(topic);
-          return normalizeMCQ(raw) ? toQuestion(subject, raw) : toQuestion(subject, pickLocal(subject));
-        } catch {
-          return toQuestion(subject, pickLocal(subject));
-        }
-      })
-    );
-
-    // sprinkle fun
-    if (Math.random() < 0.25) {
-      try {
-        const funny = await Gemini.generateMCQ('a funny, absurd, or silly pop-culture topic');
-        const insert = toQuestion('fun', normalizeMCQ(funny) ?? pickLocal('fun' as Subject));
-        const idx = Math.floor(Math.random() * (batch.length + 1));
-        batch.splice(idx, 0, insert);
-      } catch {
-        const insert = toQuestion('fun', pickLocal('fun' as Subject));
-        const idx = Math.floor(Math.random() * (batch.length + 1));
-        batch.splice(idx, 0, insert);
-      }
-    }
-
-    setQuestionQueue((prev) => [...prev, ...batch]);
-    return batch;
+    setQuestionQueue(prev => [...prev, ...fromDb]);
+    return fromDb;
   } finally {
     isFetchingRef.current = false;
     setIsRefilling(false);
@@ -286,7 +274,7 @@ const Play: React.FC<PlayProps> = ({ user, onUpdateUser, playSound }) => {
     setSelectedAnswer(answer);
     setIsAnswered(true);
 
-    const isCorrect = question && eq(answer, question.correctAnswer);
+    const isCorrect = question ? eq(answer, question.correctAnswer) : false;
 
     let newSessionStreak = sessionStreak;
     let newPenaltyLevel = penaltyLevel;

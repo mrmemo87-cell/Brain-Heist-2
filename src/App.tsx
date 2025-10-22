@@ -20,7 +20,7 @@ import HackResultModal from '@/components/HackResultModal';
 import ProjectorView from '@/components/ProjectorView';
 import GameOverView from '@/components/GameOverView';
 import MatrixBackground from '@/components/MatrixBackground';
-
+import { saveStats } from '@/lib/db';
 import { Howl, Howler } from 'howler';
 import { upsertProfile, getLeaderboard } from '@/lib/db';
 import { supabase } from '@/lib/supabase';
@@ -224,373 +224,245 @@ const App: React.FC = () => {
   };
 
   const handleLogin = (username: string, batch: Batch): string | null => {
-    soundService.play('click');
-    const userId = username.toLowerCase().replace(/\s/g, '');
-    const existingUserJSON = localStorage.getItem(LOCAL_STORAGE_KEY_USER_PREFIX + userId);
+  soundService.play('click');
 
-    if (existingUserJSON) {
-      let existingUser: User = JSON.parse(existingUserJSON);
-      existingUser.lastActiveTimestamp = Date.now();
-      setCurrentUser(existingUser);
-      localStorage.setItem(LOCAL_STORAGE_KEY_USER_PREFIX + existingUser.id, JSON.stringify(existingUser));
-      localStorage.setItem(LOCAL_STORAGE_KEY_CURRENT_USER, JSON.stringify(existingUser));
-      soundService.startBgMusic();
-      syncToSupabase(existingUser);
-      return null;
-    }
+  const userId = username.toLowerCase().replace(/\s/g, '');
+  const key = LOCAL_STORAGE_KEY_USER_PREFIX + userId;
+  const existing = localStorage.getItem(key);
 
-    const newUser: User = {
-      id: userId,
-      name: username,
-      avatar: `${AVATAR_API}${username}`,
-      bio: 'A new agent has entered the system...',
-      batch: batch,
-      xp: 0, level: 1, creds: 500, streak: 0,
-      hackingSkill: 10, securityLevel: 10,
-      stamina: { current: 50, max: 50 },
-      inventory: {
-        'upgrade-hack-1': 1,
-        'upgrade-sec-1': 1,
-        'upgrade-stam-1': 1,
-      },
-      activeEffects: { shielded: false, xpBoost: { active: false, expiry: null } },
-      lastActiveTimestamp: Date.now(),
-    };
-
-    localStorage.setItem(LOCAL_STORAGE_KEY_USER_PREFIX + newUser.id, JSON.stringify(newUser));
-
-    const userListJSON = localStorage.getItem(LOCAL_STORAGE_KEY_USER_LIST);
-    const userIds: string[] = userListJSON ? JSON.parse(userListJSON) : [];
-    if (!userIds.includes(newUser.id)) {
-      localStorage.setItem(LOCAL_STORAGE_KEY_USER_LIST, JSON.stringify([...userIds, newUser.id]));
-    }
-
-    setAllUsers(prev => [...prev, newUser]);
-    setCurrentUser(newUser);
-    localStorage.setItem(LOCAL_STORAGE_KEY_CURRENT_USER, JSON.stringify(newUser));
-
-    if (!localStorage.getItem('brain-heist-tutorial-complete')) setShowTutorial(true);
+  if (existing) {
+    const u: User = { ...JSON.parse(existing), lastActiveTimestamp: Date.now() };
+    setCurrentUser(u);
+    localStorage.setItem(key, JSON.stringify(u));
+    localStorage.setItem(LOCAL_STORAGE_KEY_CURRENT_USER, JSON.stringify(u));
     soundService.startBgMusic();
-    syncToSupabase(newUser);
+
+    // push full stats to DB
+    saveStats({
+      username: u.name,
+      batch: String(u.batch),
+      xp: u.xp,
+      creds: u.creds,
+      hacking: u.hackingSkill,
+      security: u.securityLevel,
+      stamina_current: u.stamina.current,
+      stamina_max: u.stamina.max,
+      bio: u.bio ?? '',
+    }).catch(console.error);
+
     return null;
-  };
-
-  const handleLogout = () => {
-    soundService.play('click');
-    localStorage.removeItem(LOCAL_STORAGE_KEY_CURRENT_USER);
-    setCurrentUser(null);
-    soundService.stopBgMusic();
-  };
-
-  const handleHack = useCallback((targetUser: User) => {
-    if (!currentUser) return;
-
-    const hackerJSON = localStorage.getItem(LOCAL_STORAGE_KEY_USER_PREFIX + currentUser.id);
-    const targetJSON = localStorage.getItem(LOCAL_STORAGE_KEY_USER_PREFIX + targetUser.id);
-    if (!hackerJSON || !targetJSON) return;
-
-    let hacker: User = JSON.parse(hackerJSON);
-    let target: User = JSON.parse(targetJSON);
-
-    const cooldownDuration = 60 * 60 * 1000; // 1 hour
-    if (target.lastHackedTimestamp && Date.now() - target.lastHackedTimestamp < cooldownDuration) {
-      setHackResult({
-        targetName: target.name, success: false,
-        message: `HACK FAILED: ${target.name}'s systems are under lockdown protocol. Cooldown active.`,
-        shieldUsed: false
-      });
-      return;
-    }
-
-    if (hacker.stamina.current < 10) return;
-    soundService.play('hack');
-
-    let result: HackResult;
-    hacker.stamina.current -= 10;
-    hacker.lastActiveTimestamp = Date.now();
-
-    if (target.activeEffects.shielded) {
-      target.activeEffects.shielded = false;
-      const message = `🛡️ HACK FAILED: ${hacker.name}'s intrusion was blocked by ${target.name}'s Firewall Shield. The shield was consumed.`;
-      result = { targetName: target.name, success: false, message, shieldUsed: true };
-      addLiveEvent('HACK_SHIELDED', message);
-    } else {
-      target.lastHackedTimestamp = Date.now();
-      const successChance = Math.max(0.1, Math.min(0.9, 0.5 + (hacker.hackingSkill - target.securityLevel) / 100));
-      if (Math.random() < successChance) {
-        const credsStolen = Math.floor(target.creds * (0.1 + Math.random() * 0.15));
-        hacker.creds += credsStolen;
-        target.creds -= credsStolen;
-        const message = HACK_SUCCESS_MESSAGES[Math.floor(Math.random() * HACK_SUCCESS_MESSAGES.length)]
-          .replace('{hacker}', hacker.name).replace('{target}', target.name).replace('{creds}', credsStolen.toLocaleString());
-        result = { targetName: target.name, success: true, message, shieldUsed: false };
-        addLiveEvent('HACK_SUCCESS', message);
-        soundService.play('hack_win');
-      } else {
-        const credsLost = Math.floor(hacker.creds * 0.05);
-        hacker.creds -= credsLost;
-        target.creds += credsLost;
-        const message = HACK_FAIL_MESSAGES[Math.floor(Math.random() * HACK_FAIL_MESSAGES.length)]
-          .replace('{hacker}', hacker.name).replace('{target}', target.name).replace('{creds}', credsLost.toLocaleString());
-        result = { targetName: target.name, success: false, message, shieldUsed: false };
-        addLiveEvent('HACK_FAIL', message);
-        soundService.play('hack_fail');
-      }
-    }
-
-    localStorage.setItem(LOCAL_STORAGE_KEY_USER_PREFIX + hacker.id, JSON.stringify(hacker));
-    localStorage.setItem(LOCAL_STORAGE_KEY_USER_PREFIX + target.id, JSON.stringify(target));
-
-    if (currentUser?.id === hacker.id) {
-      setCurrentUser(hacker);
-      localStorage.setItem(LOCAL_STORAGE_KEY_CURRENT_USER, JSON.stringify(hacker));
-    }
-    setHackResult(result);
-    syncAllUsersFromStorage();
-  }, [currentUser, addLiveEvent, syncAllUsersFromStorage]);
-
-  const handleActivateItem = (item: Item) => {
-    if (!currentUser) return;
-    soundService.play('success');
-
-    handleUpdateUser(currentUser.id, (user) => {
-      let updatedUser = { ...user, lastActiveTimestamp: Date.now() };
-      const newInventory = { ...updatedUser.inventory };
-      if (newInventory[item.id] > 0) {
-        newInventory[item.id] -= 1;
-        if (newInventory[item.id] === 0) delete newInventory[item.id];
-      } else {
-        return user;
-      }
-      updatedUser.inventory = newInventory;
-
-      switch (item.type) {
-        case 'shield': updatedUser.activeEffects.shielded = true; break;
-        case 'upgrade':
-          if (item.effects?.hackingSkill) updatedUser.hackingSkill += item.effects.hackingSkill;
-          if (item.effects?.securityLevel) updatedUser.securityLevel += item.effects.securityLevel;
-          if (item.effects?.maxStamina) {
-            updatedUser.stamina.max += item.effects.maxStamina;
-            updatedUser.stamina.current += item.effects.maxStamina;
-          }
-          break;
-      }
-      return updatedUser;
-    });
-
-    const message = ITEM_ACTIVATION_MESSAGES[Math.floor(Math.random() * ITEM_ACTIVATION_MESSAGES.length)]
-      .replace('{user}', currentUser.name).replace('{item}', item.name);
-    addLiveEvent('ITEM_ACTIVATION', message);
-    soundService.play('activate');
-  };
-
-  const handleReact = (eventId: string, emoji: string) => {
-    if (!currentUser) return;
-    const userId = currentUser.id;
-
-    updateEventsAtomically(currentEvents => {
-      return currentEvents.map(event => {
-        if (event.id === eventId) {
-          const newReactions = { ...event.reactions };
-          const userAlreadyReactedWithEmoji = newReactions[emoji]?.includes(userId);
-
-          Object.keys(newReactions).forEach(key => {
-            newReactions[key] = newReactions[key]?.filter(id => id !== userId);
-            if (newReactions[key]?.length === 0) delete newReactions[key];
-          });
-
-          if (!userAlreadyReactedWithEmoji) {
-            if (!newReactions[emoji]) newReactions[emoji] = [];
-            newReactions[emoji].push(userId);
-          }
-          return { ...event, reactions: newReactions };
-        }
-        return event;
-      });
-    });
-
-    handleUpdateUser(currentUser.id, u => ({ ...u, lastActiveTimestamp: Date.now() }));
-  };
-
-  const finishHeist = useCallback(() => {
-    setGameOver(true);
-    localStorage.setItem(LOCAL_STORAGE_KEY_GAME_OVER, JSON.stringify(true));
-  }, []);
-
-  useEffect(() => {
-    document.body.className = theme;
-  }, [theme]);
-
-  // ✅ reflect XP changes to Supabase
-  useEffect(() => {
-    if (!currentUser) return;
-    syncToSupabase(currentUser);
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [currentUser?.xp]);
-
-  // ✅ realtime merge from profiles (batch scope)
-  useEffect(() => {
-    if (!currentUser) return;
-    const channel = supabase
-      .channel('profiles-realtime')
-      .on('postgres_changes', { event: '*', schema: 'public', table: 'profiles' }, async () => {
-        try {
-          const rows = await getLeaderboard(String(currentUser.batch));
-          setAllUsers(prev => {
-            const merged = rows.map(r => {
-              const id = r.username.toLowerCase().replace(/\s/g, '');
-              const existing = prev.find(u => u.id === id);
-              return {
-                ...(existing ?? {
-                  id,
-                  name: r.username,
-                  avatar: `${AVATAR_API}${r.username}`,
-                  bio: 'Classmate',
-                  level: 1, creds: 0, streak: 0,
-                  hackingSkill: 10, securityLevel: 10,
-                  stamina: { current: 50, max: 50 },
-                  inventory: {},
-                  activeEffects: { shielded: false, xpBoost: { active: false, expiry: null } },
-                  lastActiveTimestamp: Date.now()
-                }),
-                xp: r.xp,
-                batch: r.batch as Batch,
-              };
-            });
-            // keep any local-only users too
-            const byId = new Map<string, User>(merged.map(u => [u.id, u]));
-            prev.forEach(u => { if (!byId.has(u.id)) byId.set(u.id, u); });
-            return Array.from(byId.values()).sort((a, b) => b.xp - a.xp);
-          });
-        } catch (e) { console.error(e); }
-      })
-      .subscribe();
-
-    return () => { supabase.removeChannel(channel); };
-  }, [currentUser?.batch]);
-
-  // initial pull for classmates when opening Leaderboard
-  useEffect(() => {
-    if (!currentUser) return;
-    if (currentPage === PageEnum.LEADERBOARD) {
-      getLeaderboard(String(currentUser.batch))
-        .then(rows => {
-          setAllUsers(prev => {
-            const mapped = rows.map(r => {
-              const id = r.username.toLowerCase().replace(/\s/g, '');
-              const exist = prev.find(u => u.id === id);
-              return {
-                ...(exist ?? {
-                  id,
-                  name: r.username,
-                  avatar: `${AVATAR_API}${r.username}`,
-                  bio: 'Classmate',
-                  level: 1, creds: 0, streak: 0,
-                  hackingSkill: 10, securityLevel: 10,
-                  stamina: { current: 50, max: 50 },
-                  inventory: {},
-                  activeEffects: { shielded: false, xpBoost: { active: false, expiry: null } },
-                  lastActiveTimestamp: Date.now()
-                }),
-                xp: r.xp,
-                batch: r.batch as Batch,
-              };
-            });
-            const byId = new Map<string, User>(mapped.map(u => [u.id, u]));
-            prev.forEach(u => { if (!byId.has(u.id)) byId.set(u.id, u); });
-            return Array.from(byId.values()).sort((a, b) => b.xp - a.xp);
-          });
-        })
-        .catch(console.error);
-    }
-  }, [currentPage, currentUser]);
-
-  if (isProjectorView) {
-    return (
-      <main className="w-full h-screen">
-        <MatrixBackground />
-        <ProjectorView
-          allUsers={allUsers}
-          liveEvents={liveEvents}
-          onFinishHeist={finishHeist}
-          gameOver={gameOver}
-        />
-      </main>
-    );
   }
 
-  if (gameOver) {
-    return (
-      <main className="w-full h-screen">
-        <MatrixBackground />
-        {currentUser && <GameOverView user={currentUser} allUsers={allUsers} />}
-      </main>
-    );
+  const newUser: User = {
+    id: userId,
+    name: username,
+    avatar: `${AVATAR_API}${username}`,
+    bio: 'A new agent has entered the system...',
+    batch,
+    xp: 0, level: 1, creds: 500, streak: 0,
+    hackingSkill: 10, securityLevel: 10,
+    stamina: { current: 50, max: 50 },
+    inventory: { 'upgrade-hack-1': 1, 'upgrade-sec-1': 1, 'upgrade-stam-1': 1 },
+    activeEffects: { shielded: false, xpBoost: { active: false, expiry: null } },
+    lastActiveTimestamp: Date.now(),
+  };
+
+  localStorage.setItem(key, JSON.stringify(newUser));
+
+  const listJSON = localStorage.getItem(LOCAL_STORAGE_KEY_USER_LIST);
+  const list: string[] = listJSON ? JSON.parse(listJSON) : [];
+  if (!list.includes(newUser.id)) {
+    localStorage.setItem(LOCAL_STORAGE_KEY_USER_LIST, JSON.stringify([...list, newUser.id]));
   }
 
-  if (!currentUser) {
-    return (
-      <main className="w-full h-screen flex items-center justify-center p-4">
-        <MatrixBackground />
-        <Login onLogin={handleLogin} />
-      </main>
-    );
-  }
+  setAllUsers(prev => [...prev, newUser]);
+  setCurrentUser(newUser);
+  localStorage.setItem(LOCAL_STORAGE_KEY_CURRENT_USER, JSON.stringify(newUser));
 
-  return (
-    <div className="w-full h-screen p-2 md:p-4">
-      <MatrixBackground />
-      <Layout
-        user={currentUser}
-        onLogout={handleLogout}
-        currentPage={currentPage}
-        setCurrentPage={setCurrentPage}
-        soundService={soundService}
-        tutorialHighlight={tutorialHighlight}
-        theme={theme}
-        onToggleTheme={() => setTheme(t => t === 'classic' ? 'modern' : 'classic')}
-      >
-        {(() => {
-          switch (currentPage) {
-            case PageEnum.PROFILE:
-              return (
-                <Profile
-                  user={currentUser}
-                  onUpdateUser={handleUpdateUser}
-                  onActivateItem={handleActivateItem}
-                  theme={theme}
-                />
-              );
-            case PageEnum.LEADERBOARD:
-              return (
-                <Leaderboard
-                  allUsers={allUsers}
-                  currentUser={currentUser}
-                  liveEvents={liveEvents}
-                  onHack={handleHack}
-                  onReact={handleReact}
-                  theme={theme}
-                />
-              );
-            case PageEnum.PLAY:
-              return (
-                <Play
-                  user={currentUser}
-                  onUpdateUser={handleUpdateUser}
-                  playSound={(s) => soundService.play(s as any)}
-                />
-              );
-            case PageEnum.SHOP:
-              return <Shop user={currentUser} onUpdateUser={handleUpdateUser} items={SHOP_ITEMS} />;
-            default:
-              return null;
-          }
-        })()}
-      </Layout>
-      {showTutorial && <Tutorial username={currentUser.name} onClose={() => { setShowTutorial(false); setTutorialHighlight(null); localStorage.setItem('brain-heist-tutorial-complete', 'true'); }} highlightStep={setTutorialHighlight} />}
-      {hackResult && <HackResultModal result={hackResult} onClose={() => setHackResult(null)} />}
-    </div>
-  );
+  if (!localStorage.getItem('brain-heist-tutorial-complete')) setShowTutorial(true);
+  soundService.startBgMusic();
+
+  // create/seed row in DB
+  saveStats({
+    username: newUser.name,
+    batch: String(newUser.batch),
+    xp: newUser.xp,
+    creds: newUser.creds,
+    hacking: newUser.hackingSkill,
+    security: newUser.securityLevel,
+    stamina_current: newUser.stamina.current,
+    stamina_max: newUser.stamina.max,
+    bio: newUser.bio ?? '',
+  }).catch(console.error);
+
+  return null;
 };
 
-export default App;
+const handleLogout = () => {
+  soundService.play('click');
+  localStorage.removeItem(LOCAL_STORAGE_KEY_CURRENT_USER);
+  setCurrentUser(null);
+  soundService.stopBgMusic();
+};
+
+const handleHack = useCallback((targetUser: User) => {
+  if (!currentUser) return;
+
+  const hackerKey = LOCAL_STORAGE_KEY_USER_PREFIX + currentUser.id;
+  const targetKey = LOCAL_STORAGE_KEY_USER_PREFIX + targetUser.id;
+  const hackerJSON = localStorage.getItem(hackerKey);
+  const targetJSON = localStorage.getItem(targetKey);
+  if (!hackerJSON || !targetJSON) return;
+
+  let hacker: User = JSON.parse(hackerJSON);
+  let target: User = JSON.parse(targetJSON);
+
+  // same-batch only
+  const sameBatch =
+    String(hacker.batch || '').toUpperCase() === String(target.batch || '').toUpperCase();
+  if (!sameBatch) return;
+
+  const cooldownMs = 60 * 60 * 1000;
+  if (target.lastHackedTimestamp && Date.now() - target.lastHackedTimestamp < cooldownMs) {
+    setHackResult({
+      targetName: target.name,
+      success: false,
+      message: `HACK FAILED: ${target.name}'s systems are under lockdown protocol. Cooldown active.`,
+      shieldUsed: false,
+    });
+    return;
+  }
+
+  if ((hacker.stamina?.current ?? 0) < 10) return;
+  soundService.play('hack');
+
+  let result: HackResult;
+  hacker.stamina.current = Math.max(0, (hacker.stamina?.current ?? 0) - 10);
+  hacker.lastActiveTimestamp = Date.now();
+
+  if (target.activeEffects?.shielded) {
+    target.activeEffects.shielded = false;
+    const message = `🛡️ HACK FAILED: ${hacker.name}'s intrusion was blocked by ${target.name}'s Firewall Shield. The shield was consumed.`;
+    result = { targetName: target.name, success: false, message, shieldUsed: true };
+    addLiveEvent('HACK_SHIELDED', message);
+    soundService.play('hack_fail');
+  } else {
+    target.lastHackedTimestamp = Date.now();
+    const successChance = Math.max(0.1, Math.min(0.9, 0.5 + (hacker.hackingSkill - target.securityLevel) / 100));
+    if (Math.random() < successChance) {
+      const steal = Math.floor((target.creds ?? 0) * (0.10 + Math.random() * 0.15));
+      hacker.creds = (hacker.creds ?? 0) + steal;
+      target.creds = Math.max(0, (target.creds ?? 0) - steal);
+      const message = HACK_SUCCESS_MESSAGES[Math.floor(Math.random() * HACK_SUCCESS_MESSAGES.length)]
+        .replace('{hacker}', hacker.name).replace('{target}', target.name).replace('{creds}', steal.toLocaleString());
+      result = { targetName: target.name, success: true, message, shieldUsed: false };
+      addLiveEvent('HACK_SUCCESS', message);
+      soundService.play('hack_win');
+    } else {
+      const loss = Math.floor((hacker.creds ?? 0) * 0.05);
+      hacker.creds = Math.max(0, (hacker.creds ?? 0) - loss);
+      target.creds = (target.creds ?? 0) + loss;
+      const message = HACK_FAIL_MESSAGES[Math.floor(Math.random() * HACK_FAIL_MESSAGES.length)]
+        .replace('{hacker}', hacker.name).replace('{target}', target.name).replace('{creds}', loss.toLocaleString());
+      result = { targetName: target.name, success: false, message, shieldUsed: false };
+      addLiveEvent('HACK_FAIL', message);
+      soundService.play('hack_fail');
+    }
+  }
+
+  // persist local
+  localStorage.setItem(hackerKey, JSON.stringify(hacker));
+  localStorage.setItem(targetKey, JSON.stringify(target));
+  if (currentUser?.id === hacker.id) {
+    setCurrentUser(hacker);
+    localStorage.setItem(LOCAL_STORAGE_KEY_CURRENT_USER, JSON.stringify(hacker));
+  }
+  setHackResult(result);
+  syncAllUsersFromStorage();
+
+  // push both players' stats to DB
+  saveStats({
+    username: hacker.name, batch: String(hacker.batch),
+    xp: hacker.xp, creds: hacker.creds, hacking: hacker.hackingSkill, security: hacker.securityLevel,
+    stamina_current: hacker.stamina.current, stamina_max: hacker.stamina.max, bio: hacker.bio ?? '',
+  }).catch(console.error);
+  saveStats({
+    username: target.name, batch: String(target.batch),
+    xp: target.xp, creds: target.creds, hacking: target.hackingSkill, security: target.securityLevel,
+    stamina_current: target.stamina.current, stamina_max: target.stamina.max, bio: target.bio ?? '',
+  }).catch(console.error);
+}, [currentUser, addLiveEvent, syncAllUsersFromStorage]);
+
+const handleActivateItem = (item: Item) => {
+  if (!currentUser) return;
+  soundService.play('success');
+
+  handleUpdateUser(currentUser.id, (user) => {
+    let u = { ...user, lastActiveTimestamp: Date.now() };
+    const inv = { ...u.inventory };
+    if (inv[item.id] > 0) {
+      inv[item.id] -= 1;
+      if (inv[item.id] === 0) delete inv[item.id];
+    } else {
+      return user;
+    }
+    u.inventory = inv;
+
+    switch (item.type) {
+      case 'shield': u.activeEffects.shielded = true; break;
+      case 'upgrade':
+        if (item.effects?.hackingSkill) u.hackingSkill += item.effects.hackingSkill;
+        if (item.effects?.securityLevel) u.securityLevel += item.effects.securityLevel;
+        if (item.effects?.maxStamina) {
+          u.stamina.max += item.effects.maxStamina;
+          u.stamina.current += item.effects.maxStamina;
+        }
+        break;
+    }
+    return u;
+  });
+
+  const message = ITEM_ACTIVATION_MESSAGES[Math.floor(Math.random() * ITEM_ACTIVATION_MESSAGES.length)]
+    .replace('{user}', currentUser.name).replace('{item}', item.name);
+  addLiveEvent('ITEM_ACTIVATION', message);
+  soundService.play('activate');
+
+  // read updated user and push to DB
+  const afterJSON = localStorage.getItem(LOCAL_STORAGE_KEY_USER_PREFIX + currentUser.id);
+  if (afterJSON) {
+    const u: User = JSON.parse(afterJSON);
+    saveStats({
+      username: u.name, batch: String(u.batch),
+      xp: u.xp, creds: u.creds, hacking: u.hackingSkill, security: u.securityLevel,
+      stamina_current: u.stamina.current, stamina_max: u.stamina.max, bio: u.bio ?? '',
+    }).catch(console.error);
+  }
+};
+
+const handleReact = (eventId: string, emoji: string) => {
+  if (!currentUser) return;
+  const userId = currentUser.id;
+
+  updateEventsAtomically(currentEvents => {
+    return currentEvents.map(event => {
+      if (event.id === eventId) {
+        const newReactions = { ...event.reactions };
+        const already = newReactions[emoji]?.includes(userId);
+
+        Object.keys(newReactions).forEach(key => {
+          newReactions[key] = newReactions[key]?.filter(id => id !== userId);
+          if (newReactions[key]?.length === 0) delete newReactions[key];
+        });
+
+        if (!already) {
+          if (!newReactions[emoji]) newReactions[emoji] = [];
+          newReactions[emoji].push(userId);
+        }
+        return { ...event, reactions: newReactions };
+      }
+      return event;
+    });
+  });
+
+  handleUpdateUser(currentUser.id, u => ({ ...u, lastActiveTimestamp: Date.now() }));
+};

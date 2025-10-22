@@ -184,12 +184,14 @@ const Leaderboard: React.FC<LeaderboardProps> = ({ allUsers, currentUser, liveEv
           {sortedUsers.map((user, index) => {
             // SAFETY NORMALIZATION
             const uid = user?.id ?? user?.userId ?? `${user?.name ?? 'unknown'}-${index}`;
-            const name = user?.name ?? user?.username ?? 'Unknown';
-            const batch = (user?.batch ?? '').toString();
-            const xp = Number(user?.xp ?? 0);
-            const level = Number(user?.level ?? Math.max(1, Math.floor(xp / 100) + 1));
-            const staminaCurrent = Number(user?.stamina?.current ?? 0);
-            const staminaMax = Number(user?.stamina?.max ?? 100);
+            const name = user?.name ?? user?.username ?? 'Agent';
+const batch = String(user?.batch ?? '');
+const xp = Number(user?.xp ?? 0);
+const level = Number(user?.level ?? Math.max(1, Math.floor(xp / 100) + 1));
+const hacking = Number.isFinite(user?.hackingSkill) ? Number(user?.hackingSkill) : Number(user?.hacking ?? 10);
+const security = Number.isFinite(user?.securityLevel) ? Number(user?.securityLevel) : Number(user?.security ?? 10);
+const staminaCurrent = Number(user?.stamina?.current ?? user?.stamina_current ?? 0);
+const staminaMax = Number(user?.stamina?.max ?? user?.stamina_max ?? 100);
             const lastActive = typeof user?.lastActiveTimestamp === 'number' ? user.lastActiveTimestamp : undefined;
             const lastHacked = typeof user?.lastHackedTimestamp === 'number' ? user.lastHackedTimestamp : 0;
 
@@ -199,14 +201,16 @@ const Leaderboard: React.FC<LeaderboardProps> = ({ allUsers, currentUser, liveEv
             const onCooldown = now < cooldownEnds;
             const cooldownRemaining = onCooldown ? Math.ceil((cooldownEnds - now) / (1000 * 60)) : 0;
 
-            const sameBatch =
-  String(batch || '').toUpperCase() === String(currentUser?.batch || '').toUpperCase();
-const canHack =
+            const sameBatch = batch.toUpperCase() === String(currentUser?.batch ?? '').toUpperCase();
+const uid = user?.id ?? name.toLowerCase().replace(/\s/g, '');
+const canHack = Boolean(
   uid && currentUser?.id &&
   uid !== currentUser.id &&
   sameBatch &&
-  Number(isFinite(staminaCurrent) ? staminaCurrent : 0) >= 10 &&
-  !onCooldown;
+  staminaCurrent >= 10 &&
+  !onCooldown
+);
+
 
             const recent = latestHackEvent && latestHackEvent.message?.includes?.(` ${name}'s`) && (now - (latestHackEvent.timestamp ?? 0) < 3000);
 
