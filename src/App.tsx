@@ -43,14 +43,21 @@ const soundService = {
 
     bg: new Howl({ src: ['/sounds/bg.mp3'], volume: 0.2, loop: true, html5: true }),
   },
-  play(name: keyof typeof this.sounds extends string ? never : 'click' | 'success' | 'error' | 'hack' | 'correct' | 'wrong' | 'hack_win' | 'hack_fail' | 'level_up' | 'activate' | 'buy' | 'collect') {
+  // keep types chill; works fine in TS
+  play(
+    // @ts-ignore
+    name: 'click' | 'success' | 'error' | 'hack' | 'correct' | 'wrong' | 'hack_win' | 'hack_fail' | 'level_up' | 'activate' | 'buy' | 'collect'
+  ) {
     // @ts-ignore
     const s = this.sounds[name];
     if (s) s.play();
   },
   toggleMute() {
-    Howler.mute(!Howler.mute());
-    return Howler.mute();
+    // Howler doesn't expose getter; use internal flag safely.
+    const anyHowler = Howler as any;
+    const next = !Boolean(anyHowler._muted);
+    Howler.mute(next);
+    return next;
   },
   startBgMusic() {
     if (!this.sounds.bg.playing()) this.sounds.bg.play();
@@ -104,14 +111,19 @@ const App: React.FC = () => {
     }
 
     const allUserIds = Array.from(new Set([...userIdsFromList, ...userIdsFromScan]));
-    const users: User[] = allUserIds.map(id => {
-      const userJSON = localStorage.getItem(LOCAL_STORAGE_KEY_USER_PREFIX + id);
-      if (userJSON) {
-        try { return JSON.parse(userJSON); }
-        catch { return null; }
-      }
-      return null;
-    }).filter((u): u is User => u !== null);
+    const users: User[] = allUserIds
+      .map(id => {
+        const userJSON = localStorage.getItem(LOCAL_STORAGE_KEY_USER_PREFIX + id);
+        if (userJSON) {
+          try {
+            return JSON.parse(userJSON);
+          } catch {
+            return null;
+          }
+        }
+        return null;
+      })
+      .filter((u): u is User => u !== null);
 
     setAllUsers(users);
     if (allUserIds.length !== userIdsFromList.length) {
@@ -140,21 +152,24 @@ const App: React.FC = () => {
     document.body.className = theme;
   }, [theme, syncAllUsersFromStorage]);
 
-  const handleStorageChange = useCallback((event: StorageEvent) => {
-    if (event.key === LOCAL_STORAGE_KEY_USER_LIST || event.key?.startsWith(LOCAL_STORAGE_KEY_USER_PREFIX)) {
-      syncAllUsersFromStorage();
-      if (currentUser && event.key === LOCAL_STORAGE_KEY_USER_PREFIX + currentUser.id) {
-        const updatedUserJSON = event.newValue;
-        if (updatedUserJSON) setCurrentUser(JSON.parse(updatedUserJSON));
+  const handleStorageChange = useCallback(
+    (event: StorageEvent) => {
+      if (event.key === LOCAL_STORAGE_KEY_USER_LIST || event.key?.startsWith(LOCAL_STORAGE_KEY_USER_PREFIX)) {
+        syncAllUsersFromStorage();
+        if (currentUser && event.key === LOCAL_STORAGE_KEY_USER_PREFIX + currentUser.id) {
+          const updatedUserJSON = event.newValue;
+          if (updatedUserJSON) setCurrentUser(JSON.parse(updatedUserJSON));
+        }
       }
-    }
-    if (event.key === LOCAL_STORAGE_KEY_EVENTS) {
-      setLiveEvents(event.newValue ? JSON.parse(event.newValue) : []);
-    }
-    if (event.key === LOCAL_STORAGE_KEY_GAME_OVER) {
-      setGameOver(event.newValue ? JSON.parse(event.newValue) : false);
-    }
-  }, [currentUser, syncAllUsersFromStorage]);
+      if (event.key === LOCAL_STORAGE_KEY_EVENTS) {
+        setLiveEvents(event.newValue ? JSON.parse(event.newValue) : []);
+      }
+      if (event.key === LOCAL_STORAGE_KEY_GAME_OVER) {
+        setGameOver(event.newValue ? JSON.parse(event.newValue) : false);
+      }
+    },
+    [currentUser, syncAllUsersFromStorage]
+  );
 
   useEffect(() => {
     window.addEventListener('storage', handleStorageChange);
@@ -169,34 +184,46 @@ const App: React.FC = () => {
     setLiveEvents(newEvents);
   }, []);
 
-  const addLiveEvent = useCallback((type: LiveEvent['type'], message: string) => {
-    updateEventsAtomically(currentEvents => {
-      const newEvent: LiveEvent = { id: `evt${Date.now()}${Math.random()}`, type, message, timestamp: Date.now(), reactions: {} };
-      return [newEvent, ...currentEvents].slice(0, 20);
-    });
-  }, [updateEventsAtomically]);
+  const addLiveEvent = useCallback(
+    (type: LiveEvent['type'], message: string) => {
+      updateEventsAtomically(currentEvents => {
+        const newEvent: LiveEvent = {
+          id: `evt${Date.now()}${Math.random()}`,
+          type,
+          message,
+          timestamp: Date.now(),
+          reactions: {},
+        };
+        return [newEvent, ...currentEvents].slice(0, 20);
+      });
+    },
+    [updateEventsAtomically]
+  );
 
-  const handleUpdateUser = useCallback((userId: string, updateFn: (user: User) => User) => {
-    const userJSON = localStorage.getItem(LOCAL_STORAGE_KEY_USER_PREFIX + userId);
-    if (!userJSON) return;
-    const user = JSON.parse(userJSON);
-    const updatedUser = updateFn(user);
-    localStorage.setItem(LOCAL_STORAGE_KEY_USER_PREFIX + userId, JSON.stringify(updatedUser));
+  const handleUpdateUser = useCallback(
+    (userId: string, updateFn: (user: User) => User) => {
+      const userJSON = localStorage.getItem(LOCAL_STORAGE_KEY_USER_PREFIX + userId);
+      if (!userJSON) return;
+      const user = JSON.parse(userJSON);
+      const updatedUser = updateFn(user);
+      localStorage.setItem(LOCAL_STORAGE_KEY_USER_PREFIX + userId, JSON.stringify(updatedUser));
 
-    if (currentUser?.id === updatedUser.id) {
-      setCurrentUser(updatedUser);
-      localStorage.setItem(LOCAL_STORAGE_KEY_CURRENT_USER, JSON.stringify(updatedUser));
-    }
-    setAllUsers(prev => prev.map(u => u.id === updatedUser.id ? updatedUser : u));
-  }, [currentUser?.id]);
+      if (currentUser?.id === updatedUser.id) {
+        setCurrentUser(updatedUser);
+        localStorage.setItem(LOCAL_STORAGE_KEY_CURRENT_USER, JSON.stringify(updatedUser));
+      }
+      setAllUsers(prev => prev.map(u => (u.id === updatedUser.id ? updatedUser : u)));
+    },
+    [currentUser?.id]
+  );
 
   useEffect(() => {
     if (!currentUser || gameOver) return;
     const interval = setInterval(() => {
-      handleUpdateUser(currentUser.id, (user) => {
+      handleUpdateUser(currentUser.id, user => {
         if (user.stamina.current >= user.stamina.max) return user;
         const newStamina = Math.min(user.stamina.max, user.stamina.current + 1);
-        return { ...user, stamina: { ...user.stamina, current: newStamina }};
+        return { ...user, stamina: { ...user.stamina, current: newStamina } };
       });
     }, 5000);
     return () => clearInterval(interval);
@@ -205,10 +232,10 @@ const App: React.FC = () => {
   useEffect(() => {
     if (!currentUser || gameOver) return;
     const activityInterval = setInterval(() => {
-      handleUpdateUser(currentUser.id, (user) => ({
+      // ✅ fix: 'existing' was undefined; we just stamp now.
+      handleUpdateUser(currentUser.id, user => ({
         ...user,
-        lastActiveTimestamp: existing?.lastActiveTimestamp ?? Date.now()
-
+        lastActiveTimestamp: Date.now(),
       }));
     }, 30000);
     return () => clearInterval(activityInterval);
@@ -217,254 +244,357 @@ const App: React.FC = () => {
   // ✅ single definition (removed duplicate)
   const syncToSupabase = async (u: User) => {
     try {
-      await upsertProfile({ username: u.name, batch: (u.batch as string), xp: u.xp });
+      await upsertProfile({ username: u.name, batch: u.batch as string, xp: u.xp });
     } catch (e) {
       console.error('upsertProfile failed', e);
     }
   };
 
   const handleLogin = (username: string, batch: Batch): string | null => {
-  soundService.play('click');
+    soundService.play('click');
 
-  const userId = username.toLowerCase().replace(/\s/g, '');
-  const key = LOCAL_STORAGE_KEY_USER_PREFIX + userId;
-  const existing = localStorage.getItem(key);
+    const userId = username.toLowerCase().replace(/\s/g, '');
+    const key = LOCAL_STORAGE_KEY_USER_PREFIX + userId;
+    const existing = localStorage.getItem(key);
 
-  if (existing) {
-    const u: User = { ...JSON.parse(existing), lastActiveTimestamp: Date.now() };
-    setCurrentUser(u);
-    localStorage.setItem(key, JSON.stringify(u));
-    localStorage.setItem(LOCAL_STORAGE_KEY_CURRENT_USER, JSON.stringify(u));
+    if (existing) {
+      const u: User = { ...JSON.parse(existing), lastActiveTimestamp: Date.now() };
+      setCurrentUser(u);
+      localStorage.setItem(key, JSON.stringify(u));
+      localStorage.setItem(LOCAL_STORAGE_KEY_CURRENT_USER, JSON.stringify(u));
+      soundService.startBgMusic();
+
+      // push full stats to DB
+      saveStats({
+        username: u.name,
+        batch: String(u.batch),
+        xp: u.xp,
+        creds: u.creds,
+        hacking: u.hackingSkill,
+        security: u.securityLevel,
+        stamina_current: u.stamina.current,
+        stamina_max: u.stamina.max,
+        bio: u.bio ?? '',
+      }).catch(console.error);
+
+      return null;
+    }
+
+    const newUser: User = {
+      id: userId,
+      name: username,
+      avatar: `${AVATAR_API}${username}`,
+      bio: 'A new agent has entered the system...',
+      batch,
+      xp: 0,
+      level: 1,
+      creds: 500,
+      streak: 0,
+      hackingSkill: 10,
+      securityLevel: 10,
+      stamina: { current: 50, max: 50 },
+      inventory: { 'upgrade-hack-1': 1, 'upgrade-sec-1': 1, 'upgrade-stam-1': 1 },
+      activeEffects: { shielded: false, xpBoost: { active: false, expiry: null } },
+      lastActiveTimestamp: Date.now(),
+    };
+
+    localStorage.setItem(key, JSON.stringify(newUser));
+
+    const listJSON = localStorage.getItem(LOCAL_STORAGE_KEY_USER_LIST);
+    const list: string[] = listJSON ? JSON.parse(listJSON) : [];
+    if (!list.includes(newUser.id)) {
+      localStorage.setItem(LOCAL_STORAGE_KEY_USER_LIST, JSON.stringify([...list, newUser.id]));
+    }
+
+    setAllUsers(prev => [...prev, newUser]);
+    setCurrentUser(newUser);
+    localStorage.setItem(LOCAL_STORAGE_KEY_CURRENT_USER, JSON.stringify(newUser));
+
+    if (!localStorage.getItem('brain-heist-tutorial-complete')) setShowTutorial(true);
     soundService.startBgMusic();
 
-    // push full stats to DB
+    // create/seed row in DB
     saveStats({
-      username: u.name,
-      batch: String(u.batch),
-      xp: u.xp,
-      creds: u.creds,
-      hacking: u.hackingSkill,
-      security: u.securityLevel,
-      stamina_current: u.stamina.current,
-      stamina_max: u.stamina.max,
-      bio: u.bio ?? '',
+      username: newUser.name,
+      batch: String(newUser.batch),
+      xp: newUser.xp,
+      creds: newUser.creds,
+      hacking: newUser.hackingSkill,
+      security: newUser.securityLevel,
+      stamina_current: newUser.stamina.current,
+      stamina_max: newUser.stamina.max,
+      bio: newUser.bio ?? '',
     }).catch(console.error);
 
     return null;
-  }
-
-  const newUser: User = {
-    id: userId,
-    name: username,
-    avatar: `${AVATAR_API}${username}`,
-    bio: 'A new agent has entered the system...',
-    batch,
-    xp: 0, level: 1, creds: 500, streak: 0,
-    hackingSkill: 10, securityLevel: 10,
-    stamina: { current: 50, max: 50 },
-    inventory: { 'upgrade-hack-1': 1, 'upgrade-sec-1': 1, 'upgrade-stam-1': 1 },
-    activeEffects: { shielded: false, xpBoost: { active: false, expiry: null } },
-    lastActiveTimestamp: Date.now(),
   };
 
-  localStorage.setItem(key, JSON.stringify(newUser));
+  const handleLogout = () => {
+    soundService.play('click');
+    localStorage.removeItem(LOCAL_STORAGE_KEY_CURRENT_USER);
+    setCurrentUser(null);
+    soundService.stopBgMusic();
+  };
 
-  const listJSON = localStorage.getItem(LOCAL_STORAGE_KEY_USER_LIST);
-  const list: string[] = listJSON ? JSON.parse(listJSON) : [];
-  if (!list.includes(newUser.id)) {
-    localStorage.setItem(LOCAL_STORAGE_KEY_USER_LIST, JSON.stringify([...list, newUser.id]));
-  }
+  const handleHack = useCallback(
+    (targetUser: User) => {
+      if (!currentUser) return;
 
-  setAllUsers(prev => [...prev, newUser]);
-  setCurrentUser(newUser);
-  localStorage.setItem(LOCAL_STORAGE_KEY_CURRENT_USER, JSON.stringify(newUser));
+      const hackerKey = LOCAL_STORAGE_KEY_USER_PREFIX + currentUser.id;
+      const targetKey = LOCAL_STORAGE_KEY_USER_PREFIX + targetUser.id;
+      const hackerJSON = localStorage.getItem(hackerKey);
+      const targetJSON = localStorage.getItem(targetKey);
+      if (!hackerJSON || !targetJSON) return;
 
-  if (!localStorage.getItem('brain-heist-tutorial-complete')) setShowTutorial(true);
-  soundService.startBgMusic();
+      let hacker: User = JSON.parse(hackerJSON);
+      let target: User = JSON.parse(targetJSON);
 
-  // create/seed row in DB
-  saveStats({
-    username: newUser.name,
-    batch: String(newUser.batch),
-    xp: newUser.xp,
-    creds: newUser.creds,
-    hacking: newUser.hackingSkill,
-    security: newUser.securityLevel,
-    stamina_current: newUser.stamina.current,
-    stamina_max: newUser.stamina.max,
-    bio: newUser.bio ?? '',
-  }).catch(console.error);
+      // same-batch only
+      const sameBatch = String(hacker.batch || '').toUpperCase() === String(target.batch || '').toUpperCase();
+      if (!sameBatch) return;
 
-  return null;
-};
-
-const handleLogout = () => {
-  soundService.play('click');
-  localStorage.removeItem(LOCAL_STORAGE_KEY_CURRENT_USER);
-  setCurrentUser(null);
-  soundService.stopBgMusic();
-};
-
-const handleHack = useCallback((targetUser: User) => {
-  if (!currentUser) return;
-
-  const hackerKey = LOCAL_STORAGE_KEY_USER_PREFIX + currentUser.id;
-  const targetKey = LOCAL_STORAGE_KEY_USER_PREFIX + targetUser.id;
-  const hackerJSON = localStorage.getItem(hackerKey);
-  const targetJSON = localStorage.getItem(targetKey);
-  if (!hackerJSON || !targetJSON) return;
-
-  let hacker: User = JSON.parse(hackerJSON);
-  let target: User = JSON.parse(targetJSON);
-
-  // same-batch only
-  const sameBatch =
-    String(hacker.batch || '').toUpperCase() === String(target.batch || '').toUpperCase();
-  if (!sameBatch) return;
-
-  const cooldownMs = 60 * 60 * 1000;
-  if (target.lastHackedTimestamp && Date.now() - target.lastHackedTimestamp < cooldownMs) {
-    setHackResult({
-      targetName: target.name,
-      success: false,
-      message: `HACK FAILED: ${target.name}'s systems are under lockdown protocol. Cooldown active.`,
-      shieldUsed: false,
-    });
-    return;
-  }
-
-  if ((hacker.stamina?.current ?? 0) < 10) return;
-  soundService.play('hack');
-
-  let result: HackResult;
-  hacker.stamina.current = Math.max(0, (hacker.stamina?.current ?? 0) - 10);
-  hacker.lastActiveTimestamp = Date.now();
-
-  if (target.activeEffects?.shielded) {
-    target.activeEffects.shielded = false;
-    const message = `🛡️ HACK FAILED: ${hacker.name}'s intrusion was blocked by ${target.name}'s Firewall Shield. The shield was consumed.`;
-    result = { targetName: target.name, success: false, message, shieldUsed: true };
-    addLiveEvent('HACK_SHIELDED', message);
-    soundService.play('hack_fail');
-  } else {
-    target.lastHackedTimestamp = Date.now();
-    const successChance = Math.max(0.1, Math.min(0.9, 0.5 + (hacker.hackingSkill - target.securityLevel) / 100));
-    if (Math.random() < successChance) {
-      const steal = Math.floor((target.creds ?? 0) * (0.10 + Math.random() * 0.15));
-      hacker.creds = (hacker.creds ?? 0) + steal;
-      target.creds = Math.max(0, (target.creds ?? 0) - steal);
-      const message = HACK_SUCCESS_MESSAGES[Math.floor(Math.random() * HACK_SUCCESS_MESSAGES.length)]
-        .replace('{hacker}', hacker.name).replace('{target}', target.name).replace('{creds}', steal.toLocaleString());
-      result = { targetName: target.name, success: true, message, shieldUsed: false };
-      addLiveEvent('HACK_SUCCESS', message);
-      soundService.play('hack_win');
-    } else {
-      const loss = Math.floor((hacker.creds ?? 0) * 0.05);
-      hacker.creds = Math.max(0, (hacker.creds ?? 0) - loss);
-      target.creds = (target.creds ?? 0) + loss;
-      const message = HACK_FAIL_MESSAGES[Math.floor(Math.random() * HACK_FAIL_MESSAGES.length)]
-        .replace('{hacker}', hacker.name).replace('{target}', target.name).replace('{creds}', loss.toLocaleString());
-      result = { targetName: target.name, success: false, message, shieldUsed: false };
-      addLiveEvent('HACK_FAIL', message);
-      soundService.play('hack_fail');
-    }
-  }
-
-  // persist local
-  localStorage.setItem(hackerKey, JSON.stringify(hacker));
-  localStorage.setItem(targetKey, JSON.stringify(target));
-  if (currentUser?.id === hacker.id) {
-    setCurrentUser(hacker);
-    localStorage.setItem(LOCAL_STORAGE_KEY_CURRENT_USER, JSON.stringify(hacker));
-  }
-  setHackResult(result);
-  syncAllUsersFromStorage();
-
-  // push both players' stats to DB
-  saveStats({
-    username: hacker.name, batch: String(hacker.batch),
-    xp: hacker.xp, creds: hacker.creds, hacking: hacker.hackingSkill, security: hacker.securityLevel,
-    stamina_current: hacker.stamina.current, stamina_max: hacker.stamina.max, bio: hacker.bio ?? '',
-  }).catch(console.error);
-  saveStats({
-    username: target.name, batch: String(target.batch),
-    xp: target.xp, creds: target.creds, hacking: target.hackingSkill, security: target.securityLevel,
-    stamina_current: target.stamina.current, stamina_max: target.stamina.max, bio: target.bio ?? '',
-  }).catch(console.error);
-}, [currentUser, addLiveEvent, syncAllUsersFromStorage]);
-
-const handleActivateItem = (item: Item) => {
-  if (!currentUser) return;
-  soundService.play('success');
-
-  handleUpdateUser(currentUser.id, (user) => {
-    let u = { ...user, lastActiveTimestamp: Date.now() };
-    const inv = { ...u.inventory };
-    if (inv[item.id] > 0) {
-      inv[item.id] -= 1;
-      if (inv[item.id] === 0) delete inv[item.id];
-    } else {
-      return user;
-    }
-    u.inventory = inv;
-
-    switch (item.type) {
-      case 'shield': u.activeEffects.shielded = true; break;
-      case 'upgrade':
-        if (item.effects?.hackingSkill) u.hackingSkill += item.effects.hackingSkill;
-        if (item.effects?.securityLevel) u.securityLevel += item.effects.securityLevel;
-        if (item.effects?.maxStamina) {
-          u.stamina.max += item.effects.maxStamina;
-          u.stamina.current += item.effects.maxStamina;
-        }
-        break;
-    }
-    return u;
-  });
-
-  const message = ITEM_ACTIVATION_MESSAGES[Math.floor(Math.random() * ITEM_ACTIVATION_MESSAGES.length)]
-    .replace('{user}', currentUser.name).replace('{item}', item.name);
-  addLiveEvent('ITEM_ACTIVATION', message);
-  soundService.play('activate');
-
-  // read updated user and push to DB
-  const afterJSON = localStorage.getItem(LOCAL_STORAGE_KEY_USER_PREFIX + currentUser.id);
-  if (afterJSON) {
-    const u: User = JSON.parse(afterJSON);
-    saveStats({
-      username: u.name, batch: String(u.batch),
-      xp: u.xp, creds: u.creds, hacking: u.hackingSkill, security: u.securityLevel,
-      stamina_current: u.stamina.current, stamina_max: u.stamina.max, bio: u.bio ?? '',
-    }).catch(console.error);
-  }
-};
-
-const handleReact = (eventId: string, emoji: string) => {
-  if (!currentUser) return;
-  const userId = currentUser.id;
-
-  updateEventsAtomically(currentEvents => {
-    return currentEvents.map(event => {
-      if (event.id === eventId) {
-        const newReactions = { ...event.reactions };
-        const already = newReactions[emoji]?.includes(userId);
-
-        Object.keys(newReactions).forEach(key => {
-          newReactions[key] = newReactions[key]?.filter(id => id !== userId);
-          if (newReactions[key]?.length === 0) delete newReactions[key];
+      const cooldownMs = 60 * 60 * 1000;
+      if (target.lastHackedTimestamp && Date.now() - target.lastHackedTimestamp < cooldownMs) {
+        setHackResult({
+          targetName: target.name,
+          success: false,
+          message: `HACK FAILED: ${target.name}'s systems are under lockdown protocol. Cooldown active.`,
+          shieldUsed: false,
         });
-
-        if (!already) {
-          if (!newReactions[emoji]) newReactions[emoji] = [];
-          newReactions[emoji].push(userId);
-        }
-        return { ...event, reactions: newReactions };
+        return;
       }
-      return event;
+
+      if ((hacker.stamina?.current ?? 0) < 10) return;
+      soundService.play('hack');
+
+      let result: HackResult;
+      hacker.stamina.current = Math.max(0, (hacker.stamina?.current ?? 0) - 10);
+      hacker.lastActiveTimestamp = Date.now();
+
+      if (target.activeEffects?.shielded) {
+        target.activeEffects.shielded = false;
+        const message = `🛡️ HACK FAILED: ${hacker.name}'s intrusion was blocked by ${target.name}'s Firewall Shield. The shield was consumed.`;
+        result = { targetName: target.name, success: false, message, shieldUsed: true };
+        addLiveEvent('HACK_SHIELDED', message);
+        soundService.play('hack_fail');
+      } else {
+        target.lastHackedTimestamp = Date.now();
+        const successChance = Math.max(
+          0.1,
+          Math.min(0.9, 0.5 + (hacker.hackingSkill - target.securityLevel) / 100)
+        );
+        if (Math.random() < successChance) {
+          const steal = Math.floor((target.creds ?? 0) * (0.1 + Math.random() * 0.15));
+          hacker.creds = (hacker.creds ?? 0) + steal;
+          target.creds = Math.max(0, (target.creds ?? 0) - steal);
+          const message = HACK_SUCCESS_MESSAGES[Math.floor(Math.random() * HACK_SUCCESS_MESSAGES.length)]
+            .replace('{hacker}', hacker.name)
+            .replace('{target}', target.name)
+            .replace('{creds}', steal.toLocaleString());
+          result = { targetName: target.name, success: true, message, shieldUsed: false };
+          addLiveEvent('HACK_SUCCESS', message);
+          soundService.play('hack_win');
+        } else {
+          const loss = Math.floor((hacker.creds ?? 0) * 0.05);
+          hacker.creds = Math.max(0, (hacker.creds ?? 0) - loss);
+          target.creds = (target.creds ?? 0) + loss;
+          const message = HACK_FAIL_MESSAGES[Math.floor(Math.random() * HACK_FAIL_MESSAGES.length)]
+            .replace('{hacker}', hacker.name)
+            .replace('{target}', target.name)
+            .replace('{creds}', loss.toLocaleString());
+          result = { targetName: target.name, success: false, message, shieldUsed: false };
+          addLiveEvent('HACK_FAIL', message);
+          soundService.play('hack_fail');
+        }
+      }
+
+      // persist local
+      localStorage.setItem(hackerKey, JSON.stringify(hacker));
+      localStorage.setItem(targetKey, JSON.stringify(target));
+      if (currentUser?.id === hacker.id) {
+        setCurrentUser(hacker);
+        localStorage.setItem(LOCAL_STORAGE_KEY_CURRENT_USER, JSON.stringify(hacker));
+      }
+      setHackResult(result);
+      syncAllUsersFromStorage();
+
+      // push both players' stats to DB
+      saveStats({
+        username: hacker.name,
+        batch: String(hacker.batch),
+        xp: hacker.xp,
+        creds: hacker.creds,
+        hacking: hacker.hackingSkill,
+        security: hacker.securityLevel,
+        stamina_current: hacker.stamina.current,
+        stamina_max: hacker.stamina.max,
+        bio: hacker.bio ?? '',
+      }).catch(console.error);
+      saveStats({
+        username: target.name,
+        batch: String(target.batch),
+        xp: target.xp,
+        creds: target.creds,
+        hacking: target.hackingSkill,
+        security: target.securityLevel,
+        stamina_current: target.stamina.current,
+        stamina_max: target.stamina.max,
+        bio: target.bio ?? '',
+      }).catch(console.error);
+    },
+    [currentUser, addLiveEvent, syncAllUsersFromStorage]
+  );
+
+  const handleActivateItem = (item: Item) => {
+    if (!currentUser) return;
+    soundService.play('success');
+
+    handleUpdateUser(currentUser.id, user => {
+      let u = { ...user, lastActiveTimestamp: Date.now() };
+      const inv = { ...u.inventory };
+      if (inv[item.id] > 0) {
+        inv[item.id] -= 1;
+        if (inv[item.id] === 0) delete inv[item.id];
+      } else {
+        return user;
+      }
+      u.inventory = inv;
+
+      switch (item.type) {
+        case 'shield':
+          u.activeEffects.shielded = true;
+          break;
+        case 'upgrade':
+          if (item.effects?.hackingSkill) u.hackingSkill += item.effects.hackingSkill;
+          if (item.effects?.securityLevel) u.securityLevel += item.effects.securityLevel;
+          if (item.effects?.maxStamina) {
+            u.stamina.max += item.effects.maxStamina;
+            u.stamina.current += item.effects.maxStamina;
+          }
+          break;
+      }
+      return u;
     });
-  });
 
-  handleUpdateUser(currentUser.id, u => ({ ...u, lastActiveTimestamp: Date.now() }));
+    const message = ITEM_ACTIVATION_MESSAGES[Math.floor(Math.random() * ITEM_ACTIVATION_MESSAGES.length)]
+      .replace('{user}', currentUser.name)
+      .replace('{item}', item.name);
+    addLiveEvent('ITEM_ACTIVATION', message);
+    soundService.play('activate');
 
-}; // ← closes: const App: React.FC = () => { ... }
+    // read updated user and push to DB
+    const afterJSON = localStorage.getItem(LOCAL_STORAGE_KEY_USER_PREFIX + currentUser.id);
+    if (afterJSON) {
+      const u: User = JSON.parse(afterJSON);
+      saveStats({
+        username: u.name,
+        batch: String(u.batch),
+        xp: u.xp,
+        creds: u.creds,
+        hacking: u.hackingSkill,
+        security: u.securityLevel,
+        stamina_current: u.stamina.current,
+        stamina_max: u.stamina.max,
+        bio: u.bio ?? '',
+      }).catch(console.error);
+    }
+  };
+
+  const handleReact = (eventId: string, emoji: string) => {
+    if (!currentUser) return;
+    const userId = currentUser.id;
+
+    updateEventsAtomically(currentEvents => {
+      return currentEvents.map(event => {
+        if (event.id === eventId) {
+          const newReactions = { ...event.reactions };
+          const already = newReactions[emoji]?.includes(userId);
+
+          Object.keys(newReactions).forEach(key => {
+            newReactions[key] = newReactions[key]?.filter(id => id !== userId);
+            if (newReactions[key]?.length === 0) delete newReactions[key];
+          });
+
+          if (!already) {
+            if (!newReactions[emoji]) newReactions[emoji] = [];
+            newReactions[emoji].push(userId);
+          }
+          return { ...event, reactions: newReactions };
+        }
+        return event;
+      });
+    });
+
+    handleUpdateUser(currentUser.id, u => ({ ...u, lastActiveTimestamp: Date.now() }));
+  };
+
+  // ⬇️⬇️⬇️ Replace from here down with the exact tail you wanted ⬇️⬇️⬇️
+  return (
+    <div className="w-full h-screen p-2 md:p-4">
+      <MatrixBackground />
+      <Layout
+        user={currentUser}
+        onLogout={handleLogout}
+        currentPage={currentPage}
+        setCurrentPage={setCurrentPage}
+        soundService={soundService}
+        tutorialHighlight={tutorialHighlight}
+        theme={theme}
+        onToggleTheme={() => setTheme(t => (t === 'classic' ? 'modern' : 'classic'))}
+      >
+        {(() => {
+          switch (currentPage) {
+            case PageEnum.PROFILE:
+              return (
+                <Profile
+                  user={currentUser}
+                  onUpdateUser={handleUpdateUser}
+                  onActivateItem={handleActivateItem}
+                  theme={theme}
+                />
+              );
+            case PageEnum.LEADERBOARD:
+              return (
+                <Leaderboard
+                  allUsers={allUsers}
+                  currentUser={currentUser}
+                  liveEvents={liveEvents}
+                  onHack={handleHack}
+                  onReact={handleReact}
+                  theme={theme}
+                />
+              );
+            case PageEnum.PLAY:
+              return (
+                <Play
+                  user={currentUser}
+                  onUpdateUser={handleUpdateUser}
+                  playSound={(s) => soundService.play(s as any)}
+                />
+              );
+            case PageEnum.SHOP:
+              return <Shop user={currentUser} onUpdateUser={handleUpdateUser} items={SHOP_ITEMS} />;
+            default:
+              return null;
+          }
+        })()}
+      </Layout>
+
+      {showTutorial && (
+        <Tutorial
+          username={currentUser!.name}
+          onClose={() => {
+            setShowTutorial(false);
+            setTutorialHighlight(null);
+            localStorage.setItem('brain-heist-tutorial-complete', 'true');
+          }}
+          highlightStep={setTutorialHighlight}
+        />
+      )}
+
+      {hackResult && <HackResultModal result={hackResult} onClose={() => setHackResult(null)} />}
+    </div>
+  );
+}; // <— closes: const App: React.FC = () => { ... }
+
 export default App;
