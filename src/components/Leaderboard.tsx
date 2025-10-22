@@ -6,39 +6,49 @@ import { AVAILABLE_BATCHES } from '@/constants';
 import { supabase } from '@/lib/supabase';
 
 // MiniProfileModal Component
-const MiniProfileModal: React.FC<{ user: User; onClose: () => void; theme: 'classic' | 'modern' }> = ({ user, onClose, theme }) => {
-    return (
-        <div className="fixed inset-0 bg-black/70 backdrop-blur-sm flex items-center justify-center z-50 animate-fade-in" onClick={onClose}>
-            <div className="hacker-box w-[95vw] max-w-md p-6" onClick={e => e.stopPropagation()}>
-                <div className="flex items-center space-x-4 mb-4">
-                    <img src={user.avatar} alt={user.name} className="w-24 h-24 rounded-full border-2 border-cyan-400" />
-                    <div>
-                        <h3 className="text-2xl font-bold font-orbitron text-cyan-300">{user.name}</h3>
-                        <p className="text-gray-400">{user.batch}</p>
-                    </div>
-                </div>
-                <p className="text-gray-300 italic mb-4">"{user.bio}"</p>
-                <div className="border-t border-green-500/20 pt-4">
-                  {theme === 'modern' ? (
-                     <div className="grid grid-cols-3 gap-4 text-center">
-                        <RadialGauge value={user.hackingSkill} maxValue={100} label="Hacking" color="hsl(340, 100%, 60%)" size={80} />
-                        <RadialGauge value={user.securityLevel} maxValue={100} label="Security" color="hsl(195, 100%, 50%)" size={80} />
-                        <RadialGauge value={user.stamina.current} maxValue={user.stamina.max} label="Stamina" color="hsl(50, 100%, 50%)" size={80} />
-                    </div>
-                  ) : (
-                    <div className="space-y-2">
-                      <p><strong>Level:</strong> {user.level}</p>
-                      <p><strong>Hacking Skill:</strong> {user.hackingSkill}</p>
-                      <p><strong>Security Level:</strong> {user.securityLevel}</p>
-                      <p><strong>Creds:</strong> {user.creds.toLocaleString()}</p>
-                    </div>
-                  )}
-                </div>
-                 <button onClick={onClose} className="hacker-button mt-4 w-full">&gt; Close</button>
-            </div>
+const MiniProfileModal: React.FC<{ user: User; onClose: () => void; theme: 'classic' | 'modern' }>
+= ({ user, onClose, theme }) => {
+  const name = user?.name ?? 'Agent';
+  const batch = String(user?.batch ?? '');
+  const bio = user?.bio ?? '';
+  const hacking = Number(user?.hackingSkill ?? 0);
+  const security = Number(user?.securityLevel ?? 0);
+  const staminaCur = Number(user?.stamina?.current ?? 0);
+  const staminaMax = Number(user?.stamina?.max ?? 100);
+
+  return (
+    <div className="fixed inset-0 bg-black/70 backdrop-blur-sm flex items-center justify-center z-50 animate-fade-in" onClick={onClose}>
+      <div className="hacker-box w-[95vw] max-w-md p-6" onClick={e => e.stopPropagation()}>
+        <div className="flex items-center space-x-4 mb-4">
+          <img src={user?.avatar ?? ''} alt={name} className="w-24 h-24 rounded-full border-2 border-cyan-400" />
+          <div>
+            <h3 className="text-2xl font-bold font-orbitron text-cyan-300">{name}</h3>
+            <p className="text-gray-400">{batch}</p>
+          </div>
         </div>
-    );
+        <p className="text-gray-300 italic mb-4">"{bio}"</p>
+        <div className="border-t border-green-500/20 pt-4">
+          {theme === 'modern' ? (
+            <div className="grid grid-cols-3 gap-4 text-center">
+              <RadialGauge value={hacking} maxValue={100} label="Hacking" color="hsl(340, 100%, 60%)" size={80} />
+              <RadialGauge value={security} maxValue={100} label="Security" color="hsl(195, 100%, 50%)" size={80} />
+              <RadialGauge value={staminaCur} maxValue={staminaMax} label="Stamina" color="hsl(50, 100%, 50%)" size={80} />
+            </div>
+          ) : (
+            <div className="space-y-2">
+              <p><strong>Level:</strong> {Number(user?.level ?? 1)}</p>
+              <p><strong>Hacking Skill:</strong> {hacking}</p>
+              <p><strong>Security Level:</strong> {security}</p>
+              <p><strong>Creds:</strong> {Number(user?.creds ?? 0).toLocaleString()}</p>
+            </div>
+          )}
+        </div>
+        <button onClick={onClose} className="hacker-button mt-4 w-full">&gt; Close</button>
+      </div>
+    </div>
+  );
 };
+
 
 // LiveFeed Components
 const REACTION_EMOJIS = ['🔥', '🤯', '😈', '😂'];
@@ -189,8 +199,14 @@ const Leaderboard: React.FC<LeaderboardProps> = ({ allUsers, currentUser, liveEv
             const onCooldown = now < cooldownEnds;
             const cooldownRemaining = onCooldown ? Math.ceil((cooldownEnds - now) / (1000 * 60)) : 0;
 
-            const sameBatch = batch && currentUser?.batch && batch === currentUser.batch;
-            const canHack = uid !== currentUser?.id && sameBatch && staminaCurrent >= 10 && !onCooldown;
+            const sameBatch =
+  String(batch || '').toUpperCase() === String(currentUser?.batch || '').toUpperCase();
+const canHack =
+  uid && currentUser?.id &&
+  uid !== currentUser.id &&
+  sameBatch &&
+  Number(isFinite(staminaCurrent) ? staminaCurrent : 0) >= 10 &&
+  !onCooldown;
 
             const recent = latestHackEvent && latestHackEvent.message?.includes?.(` ${name}'s`) && (now - (latestHackEvent.timestamp ?? 0) < 3000);
 

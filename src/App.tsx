@@ -207,7 +207,8 @@ const App: React.FC = () => {
     const activityInterval = setInterval(() => {
       handleUpdateUser(currentUser.id, (user) => ({
         ...user,
-        lastActiveTimestamp: Date.now()
+        lastActiveTimestamp: existing?.lastActiveTimestamp ?? Date.now()
+
       }));
     }, 30000);
     return () => clearInterval(activityInterval);

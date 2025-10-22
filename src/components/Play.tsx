@@ -6,11 +6,15 @@ import { XCircleIcon, GiftIcon } from './ui/Icons';
 import SurpriseBoxModal from './SurpriseBoxModal';
 import { getQuestionsBySubject } from '@/lib/db';
 
+
 interface PlayProps {
   user: User;
   onUpdateUser: (userId: string, updateFn: (user: User) => User) => void;
   playSound: (sound: 'success' | 'error' | 'click') => void;
 }
+
+const eq = (a: string, b: string) =>
+  String(a ?? '').trim().toLowerCase() === String(b ?? '').trim().toLowerCase();
 
 const QUESTIONS_TO_FETCH = 5;
 const REFILL_THRESHOLD = 2;
@@ -84,12 +88,27 @@ const pickLocal = (subject: Subject) => {
 const normalizeMCQ = (raw: any): { question: string; options: string[]; answer: string } | null => {
   if (!raw) return null;
   const q = String(raw.question ?? raw.text ?? '').trim();
-  const opts = Array.isArray(raw.options) ? raw.options.map(String).filter(Boolean) : [];
-  const ans = String(raw.answer ?? raw.correctAnswer ?? '').trim();
+
+  let opts: string[] = Array.isArray(raw.options) ? raw.options : [];
+  opts = opts.map(o => String(o ?? '').trim()).filter(Boolean);
+
+  // allow answer as index / letter / text
+  let ans = raw.answer ?? raw.correctAnswer ?? raw.correct_index ?? raw.correctIndex;
+  if (typeof ans === 'number') ans = opts[ans] ?? opts[0];
+  if (typeof ans === 'string') {
+    const s = ans.trim();
+    const letter = s.toUpperCase();
+    if (['A','B','C','D'].includes(letter)) ans = opts['ABCD'.indexOf(letter)] ?? opts[0];
+    else {
+      const hit = opts.find(o => eq(o, s));
+      ans = hit ?? opts[0];
+    }
+  }
+
   if (!q || opts.length < 2) return null;
-  const answer = opts.includes(ans) ? ans : opts[0]; // ensure consistency
-  return { question: q, options: opts, answer };
+  return { question: q, options: opts, answer: String(ans ?? '').trim() };
 };
+
 
 const toQuestion = (topic: string, mcqLike: any): Question => {
   const m =
@@ -267,7 +286,7 @@ const Play: React.FC<PlayProps> = ({ user, onUpdateUser, playSound }) => {
     setSelectedAnswer(answer);
     setIsAnswered(true);
 
-    const isCorrect = answer === question.correctAnswer;
+    const isCorrect = question && eq(answer, question.correctAnswer);
 
     let newSessionStreak = sessionStreak;
     let newPenaltyLevel = penaltyLevel;
