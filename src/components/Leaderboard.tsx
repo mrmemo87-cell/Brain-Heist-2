@@ -115,95 +115,119 @@ const getStatusInfo = (lastActiveTimestamp?: number) => {
     return { color: 'bg-red-500', title: 'Inactive for >40m' };
 };
 
+// --- guards + safe rendering added ---
 const Leaderboard: React.FC<LeaderboardProps> = ({ allUsers, currentUser, liveEvents, onHack, onReact, theme }) => {
+  // HARD GUARDS to prevent black screen
+  if (!allUsers || !Array.isArray(allUsers)) return <div className="p-4">Loading leaderboard…</div>;
+  if (!currentUser) return <div className="p-4">Sign in to see the leaderboard.</div>;
+
   const [filter, setFilter] = useState<string>('global');
   const [selectedUser, setSelectedUser] = useState<User | null>(null);
   const [now, setNow] = useState(Date.now());
 
-  useEffect(() => {
-    const timer = setInterval(() => setNow(Date.now()), 1000);
-    return () => clearInterval(timer);
-  }, []);
+  useEffect(() => { const t = setInterval(() => setNow(Date.now()), 1000); return () => clearInterval(t); }, []);
 
   const sortedUsers = useMemo(() => {
-    return [...allUsers]
-      .filter(user => filter === 'global' || user.batch === filter)
-      .sort((a, b) => (b.xp || 0) - (a.xp || 0));
+    // defensively coerce xp
+    const list = (allUsers ?? []).filter(u => !!u);
+    const filtered = filter === 'global' ? list : list.filter(u => (u?.batch ?? '') === filter);
+    return filtered.sort((a, b) => (Number(b?.xp ?? 0) - Number(a?.xp ?? 0)));
   }, [allUsers, filter]);
-  
-  const availableBatches = useMemo(() => {
-    return ['global', ...AVAILABLE_BATCHES];
-  }, []);
 
-  const latestHackEvent = useMemo(() => liveEvents.find(e => e.type === 'HACK_SUCCESS'), [liveEvents]);
+  const availableBatches = useMemo(() => ['global', ...AVAILABLE_BATCHES], []);
+  const latestHackEvent = useMemo(
+    () => liveEvents?.find?.(e => e?.type === 'HACK_SUCCESS'),
+    [liveEvents]
+  );
 
   return (
     <div className="h-full grid grid-cols-1 lg:grid-cols-3 gap-4">
       {selectedUser && <MiniProfileModal user={selectedUser} onClose={() => setSelectedUser(null)} theme={theme} />}
+
       <div className="lg:col-span-2 h-full flex flex-col">
         <div className="flex flex-col sm:flex-row justify-between sm:items-center mb-4 gap-2">
           <h2 className="text-2xl font-bold text-pink-400 font-orbitron">&gt; Leaderboard</h2>
           <div className="flex space-x-1 p-1 bg-black/30 rounded-lg border border-green-500/20 self-start sm:self-center">
             {availableBatches.map(f => (
-                <button key={f} onClick={() => setFilter(f)} className={`px-3 py-1 rounded-md text-sm transition-all ${filter === f ? 'bg-green-500/80 text-black' : 'hover:bg-green-500/20'}`}>{f.toUpperCase()}</button>
+              <button key={f} onClick={() => setFilter(f)} className={`px-3 py-1 rounded-md text-sm transition-all ${filter === f ? 'bg-green-500/80 text-black' : 'hover:bg-green-500/20'}`}>
+                {f.toUpperCase()}
+              </button>
             ))}
           </div>
         </div>
+
         <div className="flex-1 overflow-y-auto pr-2 space-y-2">
+          {sortedUsers.length === 0 && (
+            <div className="hacker-box p-4 text-sm text-gray-300">No players yet in this view.</div>
+          )}
+
           {sortedUsers.map((user, index) => {
-            const status = getStatusInfo(user.lastActiveTimestamp);
-            const cooldownDuration = 60 * 60 * 1000;
-            const cooldownEnds = (user.lastHackedTimestamp || 0) + cooldownDuration;
+            // SAFETY NORMALIZATION
+            const uid = user?.id ?? user?.userId ?? `${user?.name ?? 'unknown'}-${index}`;
+            const name = user?.name ?? user?.username ?? 'Unknown';
+            const batch = (user?.batch ?? '').toString();
+            const xp = Number(user?.xp ?? 0);
+            const level = Number(user?.level ?? Math.max(1, Math.floor(xp / 100) + 1));
+            const staminaCurrent = Number(user?.stamina?.current ?? 0);
+            const staminaMax = Number(user?.stamina?.max ?? 100);
+            const lastActive = typeof user?.lastActiveTimestamp === 'number' ? user.lastActiveTimestamp : undefined;
+            const lastHacked = typeof user?.lastHackedTimestamp === 'number' ? user.lastHackedTimestamp : 0;
+
+            const status = getStatusInfo(lastActive);
+            const cooldownMs = 60 * 60 * 1000;
+            const cooldownEnds = lastHacked + cooldownMs;
             const onCooldown = now < cooldownEnds;
             const cooldownRemaining = onCooldown ? Math.ceil((cooldownEnds - now) / (1000 * 60)) : 0;
-            const canHack = user.id !== currentUser.id && user.batch === currentUser.batch && currentUser.stamina.current >= 10 && !onCooldown;
-            const isRecentTarget = latestHackEvent && latestHackEvent.message.includes(` ${user.name}'s`) && (now - latestHackEvent.timestamp < 3000);
+
+            const sameBatch = batch && currentUser?.batch && batch === currentUser.batch;
+            const canHack = uid !== currentUser?.id && sameBatch && staminaCurrent >= 10 && !onCooldown;
+
+            const recent = latestHackEvent && latestHackEvent.message?.includes?.(` ${name}'s`) && (now - (latestHackEvent.timestamp ?? 0) < 3000);
 
             let rowClass = `flex items-center justify-between p-2 hacker-box border-l-4 ${getRankColor(index)}`;
-            if (user.id === currentUser.id) rowClass += ' bg-green-500/10';
-            if (isRecentTarget) rowClass += ' animate-hack-target-pulse';
-            
+            if (uid === currentUser?.id) rowClass += ' bg-green-500/10';
+            if (recent) rowClass += ' animate-hack-target-pulse';
+
             return (
-              <div
-                key={user.id}
-                className={rowClass}
-              >
+              <div key={uid} className={rowClass}>
                 <div className="flex items-center space-x-2 md:space-x-3">
                   <span className="font-bold text-lg md:text-xl w-8 text-center">{index + 1}</span>
-                  <img src={user.avatar} alt={user.name} className="w-10 h-10 md:w-12 md:h-12 rounded-full border-2 border-pink-500/50" />
+                  <img src={user?.avatar ?? ''} alt={name} className="w-10 h-10 md:w-12 md:h-12 rounded-full border-2 border-pink-500/50" />
                   <div className="cursor-pointer" onClick={() => setSelectedUser(user)}>
                     <div className="flex items-center space-x-2">
-                        <div className={`w-3 h-3 rounded-full flex-shrink-0 ${status.color}`} title={status.title}></div>
-                        <p className="font-bold text-base md:text-lg text-white hover:text-cyan-300 transition-colors">{user.name}</p>
+                      <div className={`w-3 h-3 rounded-full flex-shrink-0 ${status.color}`} title={status.title}></div>
+                      <p className="font-bold text-base md:text-lg text-white hover:text-cyan-300 transition-colors">{name}</p>
                     </div>
-                    <p className="text-xs md:text-sm text-gray-400 ml-5">{user.batch}</p>
+                    <p className="text-xs md:text-sm text-gray-400 ml-5">{batch || '—'}</p>
                   </div>
                 </div>
+
                 <div className="flex items-center space-x-2 md:space-x-4">
-                    <div className="text-right">
-                        <p className="font-bold text-base md:text-xl text-cyan-300">{user.xp.toLocaleString()} XP</p>
-                        <p className="text-xs md:text-sm text-gray-400">Level {user.level}</p>
-                    </div>
-                    <div className="w-20 text-center">
-                        {onCooldown ? (
-                             <div className="flex flex-col items-center text-cyan-400 text-xs">
-                                <ShieldIcon className="w-5 h-5 mb-1" />
-                                <span>{cooldownRemaining}m left</span>
-                             </div>
-                        ) : (
-                             <button onClick={() => onHack(user)} disabled={!canHack} className="hacker-button text-xs px-2 py-1">
-                                Hack
-                            </button>
-                        )}
-                    </div>
+                  <div className="text-right">
+                    <p className="font-bold text-base md:text-xl text-cyan-300">{xp.toLocaleString()} XP</p>
+                    <p className="text-xs md:text-sm text-gray-400">Level {level}</p>
+                  </div>
+                  <div className="w-20 text-center">
+                    {onCooldown ? (
+                      <div className="flex flex-col items-center text-cyan-400 text-xs">
+                        <ShieldIcon className="w-5 h-5 mb-1" />
+                        <span>{cooldownRemaining}m left</span>
+                      </div>
+                    ) : (
+                      <button onClick={() => onHack(user)} disabled={!canHack} className="hacker-button text-xs px-2 py-1">
+                        Hack
+                      </button>
+                    )}
+                  </div>
                 </div>
               </div>
             );
           })}
         </div>
       </div>
+
       <div className="lg:col-span-1 h-full min-h-[200px]">
-        <LiveFeed events={liveEvents} currentUser={currentUser} onReact={onReact} />
+        <LiveFeed events={liveEvents ?? []} currentUser={currentUser} onReact={onReact} />
       </div>
     </div>
   );

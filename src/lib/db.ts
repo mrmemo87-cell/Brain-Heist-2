@@ -18,19 +18,12 @@ export async function upsertProfile(args: { username: string; batch: string; xp?
   return data?.[0] ?? null;
 }
 
-export async function getLeaderboard(batch: string, limit = 50) {
-  const b = (batch ?? '').toString().trim().toUpperCase();
-  if (!b) return [];
-  const { data, error } = await supabase
-    .from('profiles')
-    .select('username, xp, batch')
-    .eq('batch', b)
-    .order('xp', { ascending: false })
-    .limit(limit);
-
-  if (error) {
-    console.error('getLeaderboard failed:', error);
-    return [];
-  }
+export async function getLeaderboard(batch?: string, limit = 50) {
+  const { data, error } = await supabase.rpc('rpc_leaderboard_top', {
+    p_batch: batch ?? null,
+    p_limit: limit,
+  });
+  if (error) throw error;
   return Array.isArray(data) ? data : [];
 }
+
