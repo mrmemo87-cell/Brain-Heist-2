@@ -465,6 +465,6 @@ const handleReact = (eventId: string, emoji: string) => {
   });
 
   handleUpdateUser(currentUser.id, u => ({ ...u, lastActiveTimestamp: Date.now() }));
-};
+
 }; // ← closes: const App: React.FC = () => { ... }
 export default App;
