@@ -26,4 +26,18 @@ export async function getLeaderboard(batch?: string, limit = 50) {
   if (error) throw error;
   return Array.isArray(data) ? data : [];
 }
+export async function getQuestionsBySubject(subject: string, limit = 10) {
+  const { data, error } = await supabase.rpc('rpc_get_questions', {
+    p_subject: subject,
+    p_limit: limit,
+  });
+  if (error) throw error;
+  // normalize to your Question shape
+  return (data ?? []).map((r: any) => ({
+    topic: subject,
+    text: r.prompt as string,
+    options: r.options as string[],
+    correctAnswer: (r.options?.[r.correct_index] ?? '') as string,
+  }));
+}
 

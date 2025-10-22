@@ -3,6 +3,7 @@ import type { User, LiveEvent, LiveEventType } from '../types';
 import RadialGauge from './ui/RadialGauge'; // Import the new component
 import { ShieldIcon } from './ui/Icons';
 import { AVAILABLE_BATCHES } from '@/constants';
+import { supabase } from '@/lib/supabase';
 
 // MiniProfileModal Component
 const MiniProfileModal: React.FC<{ user: User; onClose: () => void; theme: 'classic' | 'modern' }> = ({ user, onClose, theme }) => {
@@ -117,28 +118,37 @@ const getStatusInfo = (lastActiveTimestamp?: number) => {
 
 // --- guards + safe rendering added ---
 const Leaderboard: React.FC<LeaderboardProps> = ({ allUsers, currentUser, liveEvents, onHack, onReact, theme }) => {
-  // HARD GUARDS to prevent black screen
-  if (!allUsers || !Array.isArray(allUsers)) return <div className="p-4">Loading leaderboard…</div>;
   if (!currentUser) return <div className="p-4">Sign in to see the leaderboard.</div>;
 
   const [filter, setFilter] = useState<string>('global');
   const [selectedUser, setSelectedUser] = useState<User | null>(null);
   const [now, setNow] = useState(Date.now());
 
+  // NEW: rows from DB RPC
+  const [rows, setRows] = useState<Array<{ username: string; batch: string; xp: number }>>([]);
+  const [loadingLB, setLoadingLB] = useState(false);
+
   useEffect(() => { const t = setInterval(() => setNow(Date.now()), 1000); return () => clearInterval(t); }, []);
 
-  const sortedUsers = useMemo(() => {
-    // defensively coerce xp
-    const list = (allUsers ?? []).filter(u => !!u);
-    const filtered = filter === 'global' ? list : list.filter(u => (u?.batch ?? '') === filter);
-    return filtered.sort((a, b) => (Number(b?.xp ?? 0) - Number(a?.xp ?? 0)));
-  }, [allUsers, filter]);
+  // fetch from RPC when filter changes
+  useEffect(() => {
+    let alive = true;
+    (async () => {
+      setLoadingLB(true);
+      const p_batch = filter === 'global' ? null : filter;
+      const { data, error } = await supabase.rpc('rpc_leaderboard_top', { p_batch, p_limit: 50 });
+      if (!alive) return;
+      if (error) console.error('leaderboard rpc', error);
+      setRows(Array.isArray(data) ? data : []);
+      setLoadingLB(false);
+    })();
+    return () => { alive = false; };
+  }, [filter]);
 
+  const sortedUsers = useMemo(() => [...rows].sort((a,b)=> (Number(b?.xp??0)-Number(a?.xp??0))), [rows]);
   const availableBatches = useMemo(() => ['global', ...AVAILABLE_BATCHES], []);
-  const latestHackEvent = useMemo(
-    () => liveEvents?.find?.(e => e?.type === 'HACK_SUCCESS'),
-    [liveEvents]
-  );
+  const latestHackEvent = useMemo(() => liveEvents?.find?.(e => e?.type === 'HACK_SUCCESS'), [liveEvents]);
+
 
   return (
     <div className="h-full grid grid-cols-1 lg:grid-cols-3 gap-4">

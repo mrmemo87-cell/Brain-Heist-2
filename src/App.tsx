@@ -22,34 +22,31 @@ import GameOverView from '@/components/GameOverView';
 import MatrixBackground from '@/components/MatrixBackground';
 
 import { Howl, Howler } from 'howler';
-
-/** ✅ NOTE: because App.tsx is at project root, keep these relative imports */
 import { upsertProfile, getLeaderboard } from '@/lib/db';
 import { supabase } from '@/lib/supabase';
 
-/** Single definition only */
-
-async function syncToSupabase(u: User) {
-  try {
-    await upsertProfile({
-      username: u.name,
-      batch: String(u.batch).toUpperCase(),
-      xp: u.xp ?? 0,
-    });
-  } catch (e) {
-    console.error('syncToSupabase failed:', e);
-  }
-}
 const soundService = {
   sounds: {
     click: new Howl({ src: ['/sounds/click.mp3'], volume: 0.5 }),
     success: new Howl({ src: ['/sounds/success.mp3'], volume: 0.5 }),
     error: new Howl({ src: ['/sounds/error.mp3'], volume: 0.5 }),
     hack: new Howl({ src: ['/sounds/hack.mp3'], volume: 0.5 }),
+    // extra SFX (safe if missing)
+    correct: new Howl({ src: ['/sounds/correct.mp3'], volume: 0.5 }),
+    wrong: new Howl({ src: ['/sounds/wrong.mp3'], volume: 0.5 }),
+    hack_win: new Howl({ src: ['/sounds/hack_win.mp3'], volume: 0.5 }),
+    hack_fail: new Howl({ src: ['/sounds/hack_fail.mp3'], volume: 0.5 }),
+    level_up: new Howl({ src: ['/sounds/level_up.mp3'], volume: 0.5 }),
+    activate: new Howl({ src: ['/sounds/activate.mp3'], volume: 0.5 }),
+    buy: new Howl({ src: ['/sounds/buy.mp3'], volume: 0.5 }),
+    collect: new Howl({ src: ['/sounds/collect.mp3'], volume: 0.5 }),
+
     bg: new Howl({ src: ['/sounds/bg.mp3'], volume: 0.2, loop: true, html5: true }),
   },
-  play(soundName: 'click' | 'success' | 'error' | 'hack') {
-    if (this.sounds[soundName]) this.sounds[soundName].play();
+  play(name: keyof typeof this.sounds extends string ? never : 'click' | 'success' | 'error' | 'hack' | 'correct' | 'wrong' | 'hack_win' | 'hack_fail' | 'level_up' | 'activate' | 'buy' | 'collect') {
+    // @ts-ignore
+    const s = this.sounds[name];
+    if (s) s.play();
   },
   toggleMute() {
     Howler.mute(!Howler.mute());
@@ -82,6 +79,16 @@ const App: React.FC = () => {
   const [theme, setTheme] = useState<'classic' | 'modern'>('modern');
   const [gameOver, setGameOver] = useState(false);
   const [currentPage, setCurrentPage] = useState<Page>(PageEnum.PROFILE);
+
+  // 🔐 ensure we have a Supabase session (anon ok) for RPC/realtime
+  useEffect(() => {
+    (async () => {
+      const { data } = await supabase.auth.getSession();
+      if (!data.session) {
+        await supabase.auth.signInAnonymously(); // ignore error; UI will handle
+      }
+    })();
+  }, []);
 
   const syncAllUsersFromStorage = useCallback(() => {
     const userListJSON = localStorage.getItem(LOCAL_STORAGE_KEY_USER_LIST);
@@ -206,7 +213,7 @@ const App: React.FC = () => {
     return () => clearInterval(activityInterval);
   }, [currentUser, gameOver, handleUpdateUser]);
 
-  /** ✅ reflect/merge with Supabase **/
+  // ✅ single definition (removed duplicate)
   const syncToSupabase = async (u: User) => {
     try {
       await upsertProfile({ username: u.name, batch: (u.batch as string), xp: u.xp });
@@ -317,6 +324,7 @@ const App: React.FC = () => {
           .replace('{hacker}', hacker.name).replace('{target}', target.name).replace('{creds}', credsStolen.toLocaleString());
         result = { targetName: target.name, success: true, message, shieldUsed: false };
         addLiveEvent('HACK_SUCCESS', message);
+        soundService.play('hack_win');
       } else {
         const credsLost = Math.floor(hacker.creds * 0.05);
         hacker.creds -= credsLost;
@@ -325,6 +333,7 @@ const App: React.FC = () => {
           .replace('{hacker}', hacker.name).replace('{target}', target.name).replace('{creds}', credsLost.toLocaleString());
         result = { targetName: target.name, success: false, message, shieldUsed: false };
         addLiveEvent('HACK_FAIL', message);
+        soundService.play('hack_fail');
       }
     }
 
@@ -371,6 +380,7 @@ const App: React.FC = () => {
     const message = ITEM_ACTIVATION_MESSAGES[Math.floor(Math.random() * ITEM_ACTIVATION_MESSAGES.length)]
       .replace('{user}', currentUser.name).replace('{item}', item.name);
     addLiveEvent('ITEM_ACTIVATION', message);
+    soundService.play('activate');
   };
 
   const handleReact = (eventId: string, emoji: string) => {
@@ -410,111 +420,89 @@ const App: React.FC = () => {
     document.body.className = theme;
   }, [theme]);
 
-  /** ✅ reflect XP changes to Supabase */
+  // ✅ reflect XP changes to Supabase
   useEffect(() => {
     if (!currentUser) return;
     syncToSupabase(currentUser);
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [currentUser?.xp]);
 
-useEffect(() => {
-  if (!currentUser) return;
-  const channel = supabase
-    .channel('profiles-realtime')
-    .on('postgres_changes', { event: '*', schema: 'public', table: 'profiles' }, () => {
-      getLeaderboard(String(currentUser.batch)).then(rows => {
-        const merged = rows.map(r => {
-          const id = r.username.toLowerCase().replace(/\s/g, '');
-          return {
-            id,
-            name: r.username,
-            avatar: `${AVATAR_API}${r.username}`,
-            bio: 'Classmate',
-            batch: r.batch,
-            xp: r.xp,
-            level: 1, creds: 0, streak: 0,
-            hackingSkill: 10, securityLevel: 10,
-            stamina: { current: 50, max: 50 },
-            inventory: {},
-            activeEffects: { shielded: false, xpBoost: { active: false, expiry: null } },
-            lastActiveTimestamp: Date.now()
-          };
-        });
-        const byId = new Map(allUsers.map(u => [u.id, u]));
-        merged.forEach(u => byId.set(u.id, { ...(byId.get(u.id) || u), xp: u.xp, batch: u.batch }));
-        setAllUsers(Array.from(byId.values()).sort((a, b) => b.xp - a.xp));
-      }).catch(console.error);
-    })
-    .subscribe();
- return () => {
-    supabase.removeChannel(channel);
-  };
-// ✅ only resubscribe when the batch changes (or user changes)
-}, [currentUser?.batch]); 
-useEffect(() => {
-  if (!currentUser) return;
-  if (currentPage === PageEnum.LEADERBOARD) {
-    getLeaderboard(String(currentUser.batch)).then(rows => {
-      // merge into your local user list, or keep a separate leaderboard list
-      // simplest: just map rows to a display list in the Leaderboard component
-    }).catch(console.error);
-  }
-}, [currentPage, currentUser]);
-
-  /** ✅ pull classmates from Supabase */
+  // ✅ realtime merge from profiles (batch scope)
   useEffect(() => {
-    let cancelled = false;
-
-    const fetchClassmates = async () => {
-      if (!currentUser) return;
-      try {
-        const rows = await getLeaderboard(String(currentUser.batch));
-        if (cancelled) return;
-
-        const merged: User[] = rows.map(r => {
-          const id = r.username.toLowerCase().replace(/\s/g, '');
-          const existingJSON = localStorage.getItem(LOCAL_STORAGE_KEY_USER_PREFIX + id);
-          const base: User = existingJSON
-            ? JSON.parse(existingJSON)
-            : {
-                id,
-                name: r.username,
-                avatar: `${AVATAR_API}${r.username}`,
-                bio: 'Classmate',
-                batch: (r.batch as Batch),
+    if (!currentUser) return;
+    const channel = supabase
+      .channel('profiles-realtime')
+      .on('postgres_changes', { event: '*', schema: 'public', table: 'profiles' }, async () => {
+        try {
+          const rows = await getLeaderboard(String(currentUser.batch));
+          setAllUsers(prev => {
+            const merged = rows.map(r => {
+              const id = r.username.toLowerCase().replace(/\s/g, '');
+              const existing = prev.find(u => u.id === id);
+              return {
+                ...(existing ?? {
+                  id,
+                  name: r.username,
+                  avatar: `${AVATAR_API}${r.username}`,
+                  bio: 'Classmate',
+                  level: 1, creds: 0, streak: 0,
+                  hackingSkill: 10, securityLevel: 10,
+                  stamina: { current: 50, max: 50 },
+                  inventory: {},
+                  activeEffects: { shielded: false, xpBoost: { active: false, expiry: null } },
+                  lastActiveTimestamp: Date.now()
+                }),
                 xp: r.xp,
-                level: 1,
-                creds: 0,
-                streak: 0,
-                hackingSkill: 10,
-                securityLevel: 10,
-                stamina: { current: 50, max: 50 },
-                inventory: {},
-                activeEffects: { shielded: false, xpBoost: { active: false, expiry: null } },
-                lastActiveTimestamp: Date.now()
+                batch: r.batch as Batch,
               };
-          base.xp = r.xp;
-          base.batch = (r.batch as Batch);
-          return base;
-        });
+            });
+            // keep any local-only users too
+            const byId = new Map<string, User>(merged.map(u => [u.id, u]));
+            prev.forEach(u => { if (!byId.has(u.id)) byId.set(u.id, u); });
+            return Array.from(byId.values()).sort((a, b) => b.xp - a.xp);
+          });
+        } catch (e) { console.error(e); }
+      })
+      .subscribe();
 
-        const byId = new Map<string, User>();
-        [...merged, ...allUsers].forEach(u => byId.set(u.id, u));
-        setAllUsers(Array.from(byId.values()).sort((a, b) => b.xp - a.xp));
-      } catch (e) {
-        console.error('fetch leaderboard failed', e);
-      }
-    };
+    return () => { supabase.removeChannel(channel); };
+  }, [currentUser?.batch]);
 
-    fetchClassmates();
-    const shouldPoll = currentPage === PageEnum.LEADERBOARD;
-    const interval = shouldPoll ? setInterval(fetchClassmates, 5000) : undefined;
-
-    return () => {
-      cancelled = true;
-      if (interval) clearInterval(interval);
-    };
-  }, [currentUser, currentPage]); // eslint-disable-line react-hooks/exhaustive-deps
+  // initial pull for classmates when opening Leaderboard
+  useEffect(() => {
+    if (!currentUser) return;
+    if (currentPage === PageEnum.LEADERBOARD) {
+      getLeaderboard(String(currentUser.batch))
+        .then(rows => {
+          setAllUsers(prev => {
+            const mapped = rows.map(r => {
+              const id = r.username.toLowerCase().replace(/\s/g, '');
+              const exist = prev.find(u => u.id === id);
+              return {
+                ...(exist ?? {
+                  id,
+                  name: r.username,
+                  avatar: `${AVATAR_API}${r.username}`,
+                  bio: 'Classmate',
+                  level: 1, creds: 0, streak: 0,
+                  hackingSkill: 10, securityLevel: 10,
+                  stamina: { current: 50, max: 50 },
+                  inventory: {},
+                  activeEffects: { shielded: false, xpBoost: { active: false, expiry: null } },
+                  lastActiveTimestamp: Date.now()
+                }),
+                xp: r.xp,
+                batch: r.batch as Batch,
+              };
+            });
+            const byId = new Map<string, User>(mapped.map(u => [u.id, u]));
+            prev.forEach(u => { if (!byId.has(u.id)) byId.set(u.id, u); });
+            return Array.from(byId.values()).sort((a, b) => b.xp - a.xp);
+          });
+        })
+        .catch(console.error);
+    }
+  }, [currentPage, currentUser]);
 
   if (isProjectorView) {
     return (
@@ -562,42 +550,41 @@ useEffect(() => {
         onToggleTheme={() => setTheme(t => t === 'classic' ? 'modern' : 'classic')}
       >
         {(() => {
-  switch (currentPage) {
-    case PageEnum.PROFILE:
-      return (
-        <Profile
-          user={currentUser}
-          onUpdateUser={handleUpdateUser}
-          onActivateItem={handleActivateItem}
-          theme={theme}
-        />
-      );
-    case PageEnum.LEADERBOARD:
-      return (
-        <Leaderboard
-          allUsers={allUsers}
-          currentUser={currentUser}
-          liveEvents={liveEvents}
-          onHack={handleHack}
-          onReact={handleReact}
-          theme={theme}
-        />
-      );
-    case PageEnum.PLAY:
-      return (
-        <Play
-          user={currentUser}
-          onUpdateUser={handleUpdateUser}
-          playSound={(s) => soundService.play(s)}
-        />
-      );
-    // Use PageEnum since "Page" is a type
-    case PageEnum.SHOP:
-      return <Shop user={currentUser} onUpdateUser={handleUpdateUser} items={SHOP_ITEMS} />;
-    default:
-      return null;
-  }
-})()}
+          switch (currentPage) {
+            case PageEnum.PROFILE:
+              return (
+                <Profile
+                  user={currentUser}
+                  onUpdateUser={handleUpdateUser}
+                  onActivateItem={handleActivateItem}
+                  theme={theme}
+                />
+              );
+            case PageEnum.LEADERBOARD:
+              return (
+                <Leaderboard
+                  allUsers={allUsers}
+                  currentUser={currentUser}
+                  liveEvents={liveEvents}
+                  onHack={handleHack}
+                  onReact={handleReact}
+                  theme={theme}
+                />
+              );
+            case PageEnum.PLAY:
+              return (
+                <Play
+                  user={currentUser}
+                  onUpdateUser={handleUpdateUser}
+                  playSound={(s) => soundService.play(s as any)}
+                />
+              );
+            case PageEnum.SHOP:
+              return <Shop user={currentUser} onUpdateUser={handleUpdateUser} items={SHOP_ITEMS} />;
+            default:
+              return null;
+          }
+        })()}
       </Layout>
       {showTutorial && <Tutorial username={currentUser.name} onClose={() => { setShowTutorial(false); setTutorialHighlight(null); localStorage.setItem('brain-heist-tutorial-complete', 'true'); }} highlightStep={setTutorialHighlight} />}
       {hackResult && <HackResultModal result={hackResult} onClose={() => setHackResult(null)} />}

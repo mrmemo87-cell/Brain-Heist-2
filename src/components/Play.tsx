@@ -4,6 +4,7 @@ import { SUBJECTS, getXpForNextLevel, SHOP_ITEMS } from '@/constants';
 import * as Gemini from '@/services/geminiService';
 import { XCircleIcon, GiftIcon } from './ui/Icons';
 import SurpriseBoxModal from './SurpriseBoxModal';
+import { getQuestionsBySubject } from '@/lib/db';
 
 interface PlayProps {
   user: User;
@@ -124,52 +125,53 @@ const Play: React.FC<PlayProps> = ({ user, onUpdateUser, playSound }) => {
   const isFetchingRef = useRef(false);
 
   const fetchQuestionBatch = useCallback(async (subject: Subject) => {
-    if (isFetchingRef.current) return;
-    isFetchingRef.current = true;
-    setIsRefilling(true);
+  if (isFetchingRef.current) return;
+  isFetchingRef.current = true;
+  setIsRefilling(true);
 
+  try {
+    // 1) try DB first
+    const dbQs = await getQuestionsBySubject(subject, QUESTIONS_TO_FETCH);
+    if (dbQs?.length) {
+      setQuestionQueue((prev) => [...prev, ...dbQs]);
+      return dbQs;
+    }
+
+    // 2) fallback to Gemini (if present) or local pool
     const topic = SUBJECT_TOPICS[subject] ?? subject;
 
-    try {
-      // get N MCQs (Gemini or fallback)
-      const batch = await Promise.all(
-        Array(QUESTIONS_TO_FETCH)
-          .fill(0)
-          .map(async () => {
-            try {
-              const raw = await Gemini.generateMCQ(topic);
-              return normalizeMCQ(raw) ? raw : pickLocal(subject);
-            } catch {
-              return pickLocal(subject);
-            }
-          })
-      );
-
-      let newQuestions: Question[] = batch.map((mcq) =>
-        'q' in (mcq as any) ? toQuestion(subject, { question: (mcq as any).q, options: (mcq as any).opts, answer: (mcq as any).ans }) : toQuestion(subject, mcq)
-      );
-
-      // sprinkle a fun bonus sometimes
-      if (Math.random() < 0.25) {
+    const batch = await Promise.all(
+      Array(QUESTIONS_TO_FETCH).fill(0).map(async () => {
         try {
-          const funny = await Gemini.generateMCQ('a funny, absurd, or silly pop-culture topic');
-          const insert = toQuestion('fun', normalizeMCQ(funny) ?? pickLocal('fun' as Subject));
-          const idx = Math.floor(Math.random() * (newQuestions.length + 1));
-          newQuestions.splice(idx, 0, insert);
+          const raw = await Gemini.generateMCQ(topic);
+          return normalizeMCQ(raw) ? toQuestion(subject, raw) : toQuestion(subject, pickLocal(subject));
         } catch {
-          const insert = toQuestion('fun', pickLocal('fun' as Subject));
-          const idx = Math.floor(Math.random() * (newQuestions.length + 1));
-          newQuestions.splice(idx, 0, insert);
+          return toQuestion(subject, pickLocal(subject));
         }
-      }
+      })
+    );
 
-      setQuestionQueue((prev) => [...prev, ...newQuestions]);
-      return newQuestions;
-    } finally {
-      isFetchingRef.current = false;
-      setIsRefilling(false);
+    // sprinkle fun
+    if (Math.random() < 0.25) {
+      try {
+        const funny = await Gemini.generateMCQ('a funny, absurd, or silly pop-culture topic');
+        const insert = toQuestion('fun', normalizeMCQ(funny) ?? pickLocal('fun' as Subject));
+        const idx = Math.floor(Math.random() * (batch.length + 1));
+        batch.splice(idx, 0, insert);
+      } catch {
+        const insert = toQuestion('fun', pickLocal('fun' as Subject));
+        const idx = Math.floor(Math.random() * (batch.length + 1));
+        batch.splice(idx, 0, insert);
+      }
     }
-  }, []);
+
+    setQuestionQueue((prev) => [...prev, ...batch]);
+    return batch;
+  } finally {
+    isFetchingRef.current = false;
+    setIsRefilling(false);
+  }
+}, []);
 
   const determineAndAwardGift = () => {
     const gifts = [
