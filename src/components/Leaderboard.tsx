@@ -181,49 +181,53 @@ const Leaderboard: React.FC<LeaderboardProps> = ({ allUsers, currentUser, liveEv
             <div className="hacker-box p-4 text-sm text-gray-300">No players yet in this view.</div>
           )}
 
+          {/* ▼▼ your requested replacement starts here ▼▼ */}
           {sortedUsers.map((user, index) => {
-            // SAFETY NORMALIZATION
-            const uid = user?.id ?? user?.userId ?? `${user?.name ?? 'unknown'}-${index}`;
-            const name = user?.name ?? user?.username ?? 'Agent';
-const batch = String(user?.batch ?? '');
-const xp = Number(user?.xp ?? 0);
-const level = Number(user?.level ?? Math.max(1, Math.floor(xp / 100) + 1));
-const hacking = Number.isFinite(user?.hackingSkill) ? Number(user?.hackingSkill) : Number(user?.hacking ?? 10);
-const security = Number.isFinite(user?.securityLevel) ? Number(user?.securityLevel) : Number(user?.security ?? 10);
-const staminaCurrent = Number(user?.stamina?.current ?? user?.stamina_current ?? 0);
-const staminaMax = Number(user?.stamina?.max ?? user?.stamina_max ?? 100);
-            const lastActive = typeof user?.lastActiveTimestamp === 'number' ? user.lastActiveTimestamp : undefined;
-            const lastHacked = typeof user?.lastHackedTimestamp === 'number' ? user.lastHackedTimestamp : 0;
+            // SAFE NORMALIZATION (no duplicate const names)
+            const playerId =
+              (user as any)?.id ??
+              (user as any)?.userId ??
+              `${(user as any)?.name ?? 'unknown'}-${index}`;
+
+            const name = (user as any)?.name ?? (user as any)?.username ?? 'Unknown';
+            const batch = String((user as any)?.batch ?? '');
+            const xp = Number((user as any)?.xp ?? 0);
+            const level = Number((user as any)?.level ?? Math.max(1, Math.floor(xp / 100) + 1));
+            const staminaCurrent = Number((user as any)?.stamina?.current ?? 0);
+            const staminaMax = Number((user as any)?.stamina?.max ?? 100);
+            const lastActive =
+              typeof (user as any)?.lastActiveTimestamp === 'number'
+                ? (user as any).lastActiveTimestamp
+                : undefined;
+            const lastHacked =
+              typeof (user as any)?.lastHackedTimestamp === 'number'
+                ? (user as any).lastHackedTimestamp
+                : 0;
 
             const status = getStatusInfo(lastActive);
             const cooldownMs = 60 * 60 * 1000;
             const cooldownEnds = lastHacked + cooldownMs;
-            const onCooldown = now < cooldownEnds;
-            const cooldownRemaining = onCooldown ? Math.ceil((cooldownEnds - now) / (1000 * 60)) : 0;
+            const onCooldown = Date.now() < cooldownEnds;
+            const cooldownRemaining = onCooldown ? Math.ceil((cooldownEnds - Date.now()) / (1000 * 60)) : 0;
 
-            const sameBatch = batch.toUpperCase() === String(currentUser?.batch ?? '').toUpperCase();
-const uid = user?.id ?? name.toLowerCase().replace(/\s/g, '');
-const canHack = Boolean(
-  uid && currentUser?.id &&
-  uid !== currentUser.id &&
-  sameBatch &&
-  staminaCurrent >= 10 &&
-  !onCooldown
-);
+            const sameBatch = batch && currentUser?.batch && batch === currentUser.batch;
+            const canHack = playerId !== currentUser?.id && sameBatch && staminaCurrent >= 10 && !onCooldown;
 
-
-            const recent = latestHackEvent && latestHackEvent.message?.includes?.(` ${name}'s`) && (now - (latestHackEvent.timestamp ?? 0) < 3000);
+            const recent =
+              latestHackEvent &&
+              latestHackEvent.message?.includes?.(` ${name}'s`) &&
+              Date.now() - (latestHackEvent.timestamp ?? 0) < 3000;
 
             let rowClass = `flex items-center justify-between p-2 hacker-box border-l-4 ${getRankColor(index)}`;
-            if (uid === currentUser?.id) rowClass += ' bg-green-500/10';
+            if (playerId === currentUser?.id) rowClass += ' bg-green-500/10';
             if (recent) rowClass += ' animate-hack-target-pulse';
 
             return (
-              <div key={uid} className={rowClass}>
+              <div key={playerId} className={rowClass}>
                 <div className="flex items-center space-x-2 md:space-x-3">
                   <span className="font-bold text-lg md:text-xl w-8 text-center">{index + 1}</span>
-                  <img src={user?.avatar ?? ''} alt={name} className="w-10 h-10 md:w-12 md:h-12 rounded-full border-2 border-pink-500/50" />
-                  <div className="cursor-pointer" onClick={() => setSelectedUser(user)}>
+                  <img src={(user as any)?.avatar ?? ''} alt={name} className="w-10 h-10 md:w-12 md:h-12 rounded-full border-2 border-pink-500/50" />
+                  <div className="cursor-pointer" onClick={() => setSelectedUser(user as any as User)}>
                     <div className="flex items-center space-x-2">
                       <div className={`w-3 h-3 rounded-full flex-shrink-0 ${status.color}`} title={status.title}></div>
                       <p className="font-bold text-base md:text-lg text-white hover:text-cyan-300 transition-colors">{name}</p>
@@ -244,7 +248,7 @@ const canHack = Boolean(
                         <span>{cooldownRemaining}m left</span>
                       </div>
                     ) : (
-                      <button onClick={() => onHack(user)} disabled={!canHack} className="hacker-button text-xs px-2 py-1">
+                      <button onClick={() => onHack(user as any as User)} disabled={!canHack} className="hacker-button text-xs px-2 py-1">
                         Hack
                       </button>
                     )}
@@ -253,6 +257,7 @@ const canHack = Boolean(
               </div>
             );
           })}
+          {/* ▲▲ replacement ends here ▲▲ */}
         </div>
       </div>
 
