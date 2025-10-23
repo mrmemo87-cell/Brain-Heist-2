@@ -532,7 +532,7 @@ const App: React.FC = () => {
   };
 
   // ⬇️⬇️⬇️ Replace from here down with the exact tail you wanted ⬇️⬇️⬇️
-  return (
+    return (
     <div className="w-full h-screen p-2 md:p-4">
       <MatrixBackground />
       <Layout
@@ -560,7 +560,7 @@ const App: React.FC = () => {
               return (
                 <Leaderboard
                   allUsers={allUsers}
-                  currentUser={currentUser}
+                  currentUser={currentUser as any}
                   liveEvents={liveEvents}
                   onHack={handleHack}
                   onReact={handleReact}
@@ -583,17 +583,22 @@ const App: React.FC = () => {
         })()}
       </Layout>
 
-      {showTutorial && currentUser && (
- {showTutorial && currentUser && (
-  <Tutorial
-    username={currentUser.name}
-    onClose={...}
-    highlightStep={setTutorialHighlight}
-  />
-)}
+      {/* Safe Tutorial: no null .name and braces are balanced */}
+      {showTutorial && (
+        <Tutorial
+          username={currentUser ? currentUser.name : 'Agent'}
+          onClose={() => {
+            setShowTutorial(false);
+            setTutorialHighlight(null);
+            localStorage.setItem('brain-heist-tutorial-complete', 'true');
+          }}
+          highlightStep={setTutorialHighlight}
+        />
+      )}
 
-
-      {hackResult && <HackResultModal result={hackResult} onClose={() => setHackResult(null)} />}
+      {hackResult && (
+        <HackResultModal result={hackResult} onClose={() => setHackResult(null)} />
+      )}
     </div>
   );
 }; // <— closes: const App: React.FC = () => { ... }
