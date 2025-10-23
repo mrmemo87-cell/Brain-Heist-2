@@ -535,65 +535,82 @@ const App: React.FC = () => {
     return (
     <div className="w-full h-screen p-2 md:p-4">
       <MatrixBackground />
-      <Layout
-        user={currentUser}
-        onLogout={handleLogout}
-        currentPage={currentPage}
-        setCurrentPage={setCurrentPage}
-        soundService={soundService}
-        tutorialHighlight={tutorialHighlight}
-        theme={theme}
-        onToggleTheme={() => setTheme(t => (t === 'classic' ? 'modern' : 'classic'))}
-      >
-        {(() => {
-          switch (currentPage) {
-            case PageEnum.PROFILE:
-              return (
-                <Profile
-                  user={currentUser}
-                  onUpdateUser={handleUpdateUser}
-                  onActivateItem={handleActivateItem}
-                  theme={theme}
-                />
-              );
-            case PageEnum.LEADERBOARD:
-              return (
-                <Leaderboard
-                  allUsers={allUsers}
-                  currentUser={currentUser as any}
-                  liveEvents={liveEvents}
-                  onHack={handleHack}
-                  onReact={handleReact}
-                  theme={theme}
-                />
-              );
-            case PageEnum.PLAY:
-              return (
-                <Play
-                  user={currentUser}
-                  onUpdateUser={handleUpdateUser}
-                  playSound={(s) => soundService.play(s as any)}
-                />
-              );
-            case PageEnum.SHOP:
-              return <Shop user={currentUser} onUpdateUser={handleUpdateUser} items={SHOP_ITEMS} />;
-            default:
-              return null;
-          }
-        })()}
-      </Layout>
 
-      {/* Safe Tutorial: no null .name and braces are balanced */}
-      {showTutorial && (
-        <Tutorial
-          username={currentUser ? currentUser.name : 'Agent'}
-          onClose={() => {
-            setShowTutorial(false);
-            setTutorialHighlight(null);
-            localStorage.setItem('brain-heist-tutorial-complete', 'true');
-          }}
-          highlightStep={setTutorialHighlight}
-        />
+      {/* Gate the app: if no currentUser yet, show Login only */}
+      {!currentUser ? (
+        <div className="max-w-md mx-auto mt-10">
+          {/* Adjust props to match your Login component signature if needed */}
+          <Login onLogin={handleLogin} />
+        </div>
+      ) : (
+        <>
+          <Layout
+            user={currentUser}
+            onLogout={handleLogout}
+            currentPage={currentPage}
+            setCurrentPage={setCurrentPage}
+            soundService={soundService}
+            tutorialHighlight={tutorialHighlight}
+            theme={theme}
+            onToggleTheme={() => setTheme(t => (t === 'classic' ? 'modern' : 'classic'))}
+          >
+            {(() => {
+              switch (currentPage) {
+                case PageEnum.PROFILE:
+                  return (
+                    <Profile
+                      user={currentUser}
+                      onUpdateUser={handleUpdateUser}
+                      onActivateItem={handleActivateItem}
+                      theme={theme}
+                    />
+                  );
+                case PageEnum.LEADERBOARD:
+                  return (
+                    <Leaderboard
+                      allUsers={allUsers}
+                      currentUser={currentUser as any}
+                      liveEvents={liveEvents}
+                      onHack={handleHack}
+                      onReact={handleReact}
+                      theme={theme}
+                    />
+                  );
+                case PageEnum.PLAY:
+                  return (
+                    <Play
+                      user={currentUser}
+                      onUpdateUser={handleUpdateUser}
+                      playSound={(s) => soundService.play(s as any)}
+                    />
+                  );
+                case PageEnum.SHOP:
+                  return (
+                    <Shop
+                      user={currentUser}
+                      onUpdateUser={handleUpdateUser}
+                      items={SHOP_ITEMS}
+                    />
+                  );
+                default:
+                  return null;
+              }
+            })()}
+          </Layout>
+
+          {/* Only show Tutorial when user exists */}
+          {showTutorial && (
+            <Tutorial
+              username={currentUser.name}
+              onClose={() => {
+                setShowTutorial(false);
+                setTutorialHighlight(null);
+                localStorage.setItem('brain-heist-tutorial-complete', 'true');
+              }}
+              highlightStep={setTutorialHighlight}
+            />
+          )}
+        </>
       )}
 
       {hackResult && (
