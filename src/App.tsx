@@ -532,90 +532,78 @@ const App: React.FC = () => {
   };
 
   // ⬇️⬇️⬇️ Replace from here down with the exact tail you wanted ⬇️⬇️⬇️
-    return (
-    <div className="w-full h-screen p-2 md:p-4">
+     return (
+    <div className="w-full h-screen p-2 md:p-4 relative">
+      {/* keep bg behind everything */}
       <MatrixBackground />
 
-      {/* Gate the app: if no currentUser yet, show Login only */}
-      {!currentUser ? (
-        <div className="max-w-md mx-auto mt-10">
-          {/* Adjust props to match your Login component signature if needed */}
+      <Layout
+        user={currentUser}
+        onLogout={handleLogout}
+        currentPage={currentPage}
+        setCurrentPage={setCurrentPage}
+        soundService={soundService}
+        tutorialHighlight={tutorialHighlight}
+        theme={theme}
+        onToggleTheme={() => setTheme(t => (t === 'classic' ? 'modern' : 'classic'))}
+      >
+        {/* 👇 Page switch lives INSIDE Layout so spacing & styling stay consistent */}
+        {!currentUser ? (
           <Login onLogin={handleLogin} />
-        </div>
-      ) : (
-        <>
-          <Layout
-            user={currentUser}
-            onLogout={handleLogout}
-            currentPage={currentPage}
-            setCurrentPage={setCurrentPage}
-            soundService={soundService}
-            tutorialHighlight={tutorialHighlight}
-            theme={theme}
-            onToggleTheme={() => setTheme(t => (t === 'classic' ? 'modern' : 'classic'))}
-          >
-            {(() => {
-              switch (currentPage) {
-                case PageEnum.PROFILE:
-                  return (
-                    <Profile
-                      user={currentUser}
-                      onUpdateUser={handleUpdateUser}
-                      onActivateItem={handleActivateItem}
-                      theme={theme}
-                    />
-                  );
-                case PageEnum.LEADERBOARD:
-                  return (
-                    <Leaderboard
-                      allUsers={allUsers}
-                      currentUser={currentUser as any}
-                      liveEvents={liveEvents}
-                      onHack={handleHack}
-                      onReact={handleReact}
-                      theme={theme}
-                    />
-                  );
-                case PageEnum.PLAY:
-                  return (
-                    <Play
-                      user={currentUser}
-                      onUpdateUser={handleUpdateUser}
-                      playSound={(s) => soundService.play(s as any)}
-                    />
-                  );
-                case PageEnum.SHOP:
-                  return (
-                    <Shop
-                      user={currentUser}
-                      onUpdateUser={handleUpdateUser}
-                      items={SHOP_ITEMS}
-                    />
-                  );
-                default:
-                  return null;
-              }
-            })()}
-          </Layout>
+        ) : (
+          (() => {
+            switch (currentPage) {
+              case PageEnum.PROFILE:
+                return (
+                  <Profile
+                    user={currentUser}
+                    onUpdateUser={handleUpdateUser}
+                    onActivateItem={handleActivateItem}
+                    theme={theme}
+                  />
+                );
+              case PageEnum.LEADERBOARD:
+                return (
+                  <Leaderboard
+                    allUsers={allUsers}
+                    currentUser={currentUser as any}
+                    liveEvents={liveEvents}
+                    onHack={handleHack}
+                    onReact={handleReact}
+                    theme={theme}
+                  />
+                );
+              case PageEnum.PLAY:
+                return (
+                  <Play
+                    user={currentUser}
+                    onUpdateUser={handleUpdateUser}
+                    playSound={(s) => soundService.play(s as any)}
+                  />
+                );
+              case PageEnum.SHOP:
+                return <Shop user={currentUser} onUpdateUser={handleUpdateUser} items={SHOP_ITEMS} />;
+              default:
+                return null;
+            }
+          })()
+        )}
+      </Layout>
 
-          {/* Only show Tutorial when user exists */}
-          {showTutorial && (
-            <Tutorial
-              username={currentUser.name}
-              onClose={() => {
-                setShowTutorial(false);
-                setTutorialHighlight(null);
-                localStorage.setItem('brain-heist-tutorial-complete', 'true');
-              }}
-              highlightStep={setTutorialHighlight}
-            />
-          )}
-        </>
+      {/* only render tutorial when we have a user */}
+      {currentUser && showTutorial && (
+        <Tutorial
+          username={currentUser.name}
+          onClose={() => {
+            setShowTutorial(false);
+            setTutorialHighlight(null);
+            localStorage.setItem('brain-heist-tutorial-complete', 'true');
+          }}
+          highlightStep={setTutorialHighlight}
+        />
       )}
 
-      {hackResult && (
-        <HackResultModal result={hackResult} onClose={() => setHackResult(null)} />
-      )}
+      {hackResult && <HackResultModal result={hackResult} onClose={() => setHackResult(null)} />}
     </div>
   );
 }; // <— closes: const App: React.FC = () => { ... }
