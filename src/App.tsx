@@ -475,6 +475,10 @@ const App: React.FC = () => {
       }
       return u;
     });
+const uname = currentUser?.name ?? 'Player';
+const message = ITEM_ACTIVATION_MESSAGES[...]
+  .replace('{user}', uname)
+  .replace('{item}', item.name);
 
     const message = ITEM_ACTIVATION_MESSAGES[Math.floor(Math.random() * ITEM_ACTIVATION_MESSAGES.length)]
       .replace('{user}', currentUser.name)
@@ -580,17 +584,17 @@ const App: React.FC = () => {
         })()}
       </Layout>
 
-      {showTutorial && (
-        <Tutorial
-          username={currentUser!.name}
-          onClose={() => {
-            setShowTutorial(false);
-            setTutorialHighlight(null);
-            localStorage.setItem('brain-heist-tutorial-complete', 'true');
-          }}
-          highlightStep={setTutorialHighlight}
-        />
-      )}
+      {showTutorial && currentUser && (
+  <Tutorial
+    username={currentUser.name}
+    onClose={() => {
+      setShowTutorial(false);
+      setTutorialHighlight(null);
+      localStorage.setItem('brain-heist-tutorial-complete', 'true');
+    }}
+    highlightStep={setTutorialHighlight}
+  />
+)}
 
       {hackResult && <HackResultModal result={hackResult} onClose={() => setHackResult(null)} />}
     </div>
