@@ -584,16 +584,14 @@ const App: React.FC = () => {
       </Layout>
 
       {showTutorial && currentUser && (
+ {showTutorial && currentUser && (
   <Tutorial
     username={currentUser.name}
-    onClose={() => {
-      setShowTutorial(false);
-      setTutorialHighlight(null);
-      localStorage.setItem('brain-heist-tutorial-complete', 'true');
-    }}
+    onClose={...}
     highlightStep={setTutorialHighlight}
   />
 )}
+
 
       {hackResult && <HackResultModal result={hackResult} onClose={() => setHackResult(null)} />}
     </div>
