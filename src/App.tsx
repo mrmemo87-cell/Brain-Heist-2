@@ -535,87 +535,70 @@ const App: React.FC = () => {
     return (
   <div className="w-full h-screen p-2 md:p-4 relative">
     <MatrixBackground />
+    <Layout
+      user={currentUser ?? guestUser}
+      onLogout={handleLogout}
+      currentPage={currentPage}
+      setCurrentPage={setCurrentPage}
+      soundService={soundService}
+      tutorialHighlight={tutorialHighlight}
+      theme={theme}
+      onToggleTheme={() => setTheme(t => (t === 'classic' ? 'modern' : 'classic'))}
+    >
+      {!currentUser ? (
+        <Login onLogin={handleLogin} />
+      ) : (
+        (() => {
+          switch (currentPage) {
+            case PageEnum.PROFILE:
+              return (
+                <Profile
+                  user={currentUser}
+                  onUpdateUser={handleUpdateUser}
+                  onActivateItem={handleActivateItem}
+                  theme={theme}
+                />
+              );
+            case PageEnum.LEADERBOARD:
+              return (
+                <Leaderboard
+                  allUsers={allUsers}
+                  currentUser={currentUser as any}
+                  liveEvents={liveEvents}
+                  onHack={handleHack}
+                  onReact={handleReact}
+                  theme={theme}
+                />
+              );
+            case PageEnum.PLAY:
+              return (
+                <Play
+                  user={currentUser}
+                  onUpdateUser={handleUpdateUser}
+                  playSound={(s) => soundService.play(s as any)}
+                />
+              );
+            case PageEnum.SHOP:
+              return <Shop user={currentUser} onUpdateUser={handleUpdateUser} items={SHOP_ITEMS} />;
+            default:
+              return null;
+          }
+        })()
+      )}
+    </Layout>
 
-    {!currentUser ? (
-      // --- Guest shell so the login looks right without Layout ---
-      <div className="max-w-5xl mx-auto w-full">
-        <div className="hacker-box p-6 md:p-8">
-          <Login onLogin={handleLogin} />
-        </div>
-      </div>
-    ) : (
-      <>
-        <Layout
-          user={currentUser}
-          onLogout={handleLogout}
-          currentPage={currentPage}
-          setCurrentPage={setCurrentPage}
-          soundService={soundService}
-          tutorialHighlight={tutorialHighlight}
-          theme={theme}
-          onToggleTheme={() => setTheme(t => (t === 'classic' ? 'modern' : 'classic'))}
-        >
-          {(() => {
-            switch (currentPage) {
-              case PageEnum.PROFILE:
-                return (
-                  <Profile
-                    user={currentUser}
-                    onUpdateUser={handleUpdateUser}
-                    onActivateItem={handleActivateItem}
-                    theme={theme}
-                  />
-                );
-              case PageEnum.LEADERBOARD:
-                return (
-                  <Leaderboard
-                    allUsers={allUsers}
-                    currentUser={currentUser as any}
-                    liveEvents={liveEvents}
-                    onHack={handleHack}
-                    onReact={handleReact}
-                    theme={theme}
-                  />
-                );
-              case PageEnum.PLAY:
-                return (
-                  <Play
-                    user={currentUser}
-                    onUpdateUser={handleUpdateUser}
-                    playSound={(s) => soundService.play(s as any)}
-                  />
-                );
-              case PageEnum.SHOP:
-                return (
-                  <Shop
-                    user={currentUser}
-                    onUpdateUser={handleUpdateUser}
-                    items={SHOP_ITEMS}
-                  />
-                );
-              default:
-                return null;
-            }
-          })()}
-        </Layout>
-
-        {showTutorial && (
-          <Tutorial
-            username={currentUser.name}
-            onClose={() => {
-              setShowTutorial(false);
-              setTutorialHighlight(null);
-              localStorage.setItem('brain-heist-tutorial-complete', 'true');
-            }}
-            highlightStep={setTutorialHighlight}
-          />
-        )}
-      </>
+    {currentUser && showTutorial && (
+      <Tutorial
+        username={currentUser.name}
+        onClose={() => {
+          setShowTutorial(false);
+          setTutorialHighlight(null);
+          localStorage.setItem('brain-heist-tutorial-complete', 'true');
+        }}
+        highlightStep={setTutorialHighlight}
+      />
     )}
 
     {hackResult && <HackResultModal result={hackResult} onClose={() => setHackResult(null)} />}
   </div>
 );
-}; // closes App
-
-export default App;
