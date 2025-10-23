@@ -22,7 +22,7 @@ import GameOverView from '@/components/GameOverView';
 import MatrixBackground from '@/components/MatrixBackground';
 import { saveStats } from '@/lib/db';
 import { Howl, Howler } from 'howler';
-import { upsertProfile, getLeaderboard } from '@/lib/db';
+import { upsertProfile /* getLeaderboard */ } from '@/lib/db';
 import { supabase } from '@/lib/supabase';
 
 const soundService = {
@@ -46,7 +46,19 @@ const soundService = {
   // keep types chill; works fine in TS
   play(
     // @ts-ignore
-    name: 'click' | 'success' | 'error' | 'hack' | 'correct' | 'wrong' | 'hack_win' | 'hack_fail' | 'level_up' | 'activate' | 'buy' | 'collect'
+    name:
+      | 'click'
+      | 'success'
+      | 'error'
+      | 'hack'
+      | 'correct'
+      | 'wrong'
+      | 'hack_win'
+      | 'hack_fail'
+      | 'level_up'
+      | 'activate'
+      | 'buy'
+      | 'collect'
   ) {
     // @ts-ignore
     const s = this.sounds[name];
@@ -64,7 +76,26 @@ const soundService = {
   },
   stopBgMusic() {
     this.sounds.bg.stop();
-  }
+  },
+};
+
+// ✅ Plain constant (no hooks at module scope)
+const GUEST_USER: User = {
+  id: 'guest',
+  name: 'Agent',
+  avatar: '/avatar-default.svg', // add a tiny svg/png under /public if you want
+  bio: '',
+  batch: '' as any,
+  xp: 0,
+  level: 1,
+  creds: 0,
+  streak: 0,
+  hackingSkill: 10,
+  securityLevel: 10,
+  stamina: { current: 0, max: 0 },
+  inventory: {},
+  activeEffects: { shielded: false, xpBoost: { active: false, expiry: null } },
+  lastActiveTimestamp: 0,
 };
 
 const AVATAR_API = 'https://api.dicebear.com/7.x/pixel-art/svg?seed=';
@@ -446,62 +477,62 @@ const App: React.FC = () => {
   );
 
   const handleActivateItem = (item: Item) => {
-  if (!currentUser) return;
-  soundService.play('success');
+    if (!currentUser) return;
+    soundService.play('success');
 
-  handleUpdateUser(currentUser.id, (user) => {
-    let u = { ...user, lastActiveTimestamp: Date.now() };
-    const inv = { ...u.inventory };
-    if (inv[item.id] > 0) {
-      inv[item.id] -= 1;
-      if (inv[item.id] === 0) delete inv[item.id];
-    } else {
-      return user;
+    handleUpdateUser(currentUser.id, user => {
+      let u = { ...user, lastActiveTimestamp: Date.now() };
+      const inv = { ...u.inventory };
+      if (inv[item.id] > 0) {
+        inv[item.id] -= 1;
+        if (inv[item.id] === 0) delete inv[item.id];
+      } else {
+        return user;
+      }
+      u.inventory = inv;
+
+      switch (item.type) {
+        case 'shield':
+          u.activeEffects.shielded = true;
+          break;
+        case 'upgrade':
+          if (item.effects?.hackingSkill) u.hackingSkill += item.effects.hackingSkill;
+          if (item.effects?.securityLevel) u.securityLevel += item.effects.securityLevel;
+          if (item.effects?.maxStamina) {
+            u.stamina.max += item.effects.maxStamina;
+            u.stamina.current += item.effects.maxStamina;
+          }
+          break;
+      }
+      return u;
+    });
+
+    const uname = currentUser?.name ?? 'Player';
+    const message =
+      ITEM_ACTIVATION_MESSAGES[Math.floor(Math.random() * ITEM_ACTIVATION_MESSAGES.length)]
+        .replace('{user}', uname)
+        .replace('{item}', item.name);
+
+    addLiveEvent('ITEM_ACTIVATION', message);
+    soundService.play('activate');
+
+    // push updated stats
+    const afterJSON = localStorage.getItem(LOCAL_STORAGE_KEY_USER_PREFIX + currentUser.id);
+    if (afterJSON) {
+      const u: User = JSON.parse(afterJSON);
+      saveStats({
+        username: u.name,
+        batch: String(u.batch),
+        xp: u.xp,
+        creds: u.creds,
+        hacking: u.hackingSkill,
+        security: u.securityLevel,
+        stamina_current: u.stamina.current,
+        stamina_max: u.stamina.max,
+        bio: u.bio ?? '',
+      }).catch(console.error);
     }
-    u.inventory = inv;
-
-    switch (item.type) {
-      case 'shield':
-        u.activeEffects.shielded = true;
-        break;
-      case 'upgrade':
-        if (item.effects?.hackingSkill) u.hackingSkill += item.effects.hackingSkill;
-        if (item.effects?.securityLevel) u.securityLevel += item.effects.securityLevel;
-        if (item.effects?.maxStamina) {
-          u.stamina.max += item.effects.maxStamina;
-          u.stamina.current += item.effects.maxStamina;
-        }
-        break;
-    }
-    return u;
-  });
-
-  const uname = currentUser?.name ?? 'Player';
-  const message =
-    ITEM_ACTIVATION_MESSAGES[Math.floor(Math.random() * ITEM_ACTIVATION_MESSAGES.length)]
-      .replace('{user}', uname)
-      .replace('{item}', item.name);
-
-  addLiveEvent('ITEM_ACTIVATION', message);
-  soundService.play('activate');
-
-  // push updated stats
-  const afterJSON = localStorage.getItem(LOCAL_STORAGE_KEY_USER_PREFIX + currentUser.id);
-  if (afterJSON) {
-    const u: User = JSON.parse(afterJSON);
-    saveStats({
-      username: u.name,
-      batch: String(u.batch),
-      xp: u.xp,
-      creds: u.creds,
-      hacking: u.hackingSkill,
-      security: u.securityLevel,
-      stamina_current: u.stamina.current,
-      stamina_max: u.stamina.max,
-      bio: u.bio ?? '',
-    }).catch(console.error);
-  }
-};
+  };
 
   const handleReact = (eventId: string, emoji: string) => {
     if (!currentUser) return;
@@ -531,74 +562,77 @@ const App: React.FC = () => {
     handleUpdateUser(currentUser.id, u => ({ ...u, lastActiveTimestamp: Date.now() }));
   };
 
-  // ⬇️⬇️⬇️ Replace from here down with the exact tail you wanted ⬇️⬇️⬇️
-    return (
-  <div className="w-full h-screen p-2 md:p-4 relative">
-    <MatrixBackground />
-    <Layout
-      user={currentUser ?? guestUser}
-      onLogout={handleLogout}
-      currentPage={currentPage}
-      setCurrentPage={setCurrentPage}
-      soundService={soundService}
-      tutorialHighlight={tutorialHighlight}
-      theme={theme}
-      onToggleTheme={() => setTheme(t => (t === 'classic' ? 'modern' : 'classic'))}
-    >
-      {!currentUser ? (
-        <Login onLogin={handleLogin} />
-      ) : (
-        (() => {
-          switch (currentPage) {
-            case PageEnum.PROFILE:
-              return (
-                <Profile
-                  user={currentUser}
-                  onUpdateUser={handleUpdateUser}
-                  onActivateItem={handleActivateItem}
-                  theme={theme}
-                />
-              );
-            case PageEnum.LEADERBOARD:
-              return (
-                <Leaderboard
-                  allUsers={allUsers}
-                  currentUser={currentUser as any}
-                  liveEvents={liveEvents}
-                  onHack={handleHack}
-                  onReact={handleReact}
-                  theme={theme}
-                />
-              );
-            case PageEnum.PLAY:
-              return (
-                <Play
-                  user={currentUser}
-                  onUpdateUser={handleUpdateUser}
-                  playSound={(s) => soundService.play(s as any)}
-                />
-              );
-            case PageEnum.SHOP:
-              return <Shop user={currentUser} onUpdateUser={handleUpdateUser} items={SHOP_ITEMS} />;
-            default:
-              return null;
-          }
-        })()
+  // ——— Render ———
+  return (
+    <div className="w-full h-screen p-2 md:p-4 relative">
+      <MatrixBackground />
+      <Layout
+        user={currentUser ?? GUEST_USER}
+        onLogout={handleLogout}
+        currentPage={currentPage}
+        setCurrentPage={setCurrentPage}
+        soundService={soundService}
+        tutorialHighlight={tutorialHighlight}
+        theme={theme}
+        onToggleTheme={() => setTheme(t => (t === 'classic' ? 'modern' : 'classic'))}
+      >
+        {!currentUser ? (
+          <Login onLogin={handleLogin} />
+        ) : (
+          (() => {
+            switch (currentPage) {
+              case PageEnum.PROFILE:
+                return (
+                  <Profile
+                    user={currentUser}
+                    onUpdateUser={handleUpdateUser}
+                    onActivateItem={handleActivateItem}
+                    theme={theme}
+                  />
+                );
+              case PageEnum.LEADERBOARD:
+                return (
+                  <Leaderboard
+                    allUsers={allUsers}
+                    currentUser={currentUser as any}
+                    liveEvents={liveEvents}
+                    onHack={handleHack}
+                    onReact={handleReact}
+                    theme={theme}
+                  />
+                );
+              case PageEnum.PLAY:
+                return (
+                  <Play
+                    user={currentUser}
+                    onUpdateUser={handleUpdateUser}
+                    playSound={s => soundService.play(s as any)}
+                  />
+                );
+              case PageEnum.SHOP:
+                return <Shop user={currentUser} onUpdateUser={handleUpdateUser} items={SHOP_ITEMS} />;
+              default:
+                return null;
+            }
+          })()
+        )}
+      </Layout>
+
+      {currentUser && showTutorial && (
+        <Tutorial
+          username={currentUser.name}
+          onClose={() => {
+            setShowTutorial(false);
+            setTutorialHighlight(null);
+            localStorage.setItem('brain-heist-tutorial-complete', 'true');
+          }}
+          highlightStep={setTutorialHighlight}
+        />
       )}
-    </Layout>
 
-    {currentUser && showTutorial && (
-      <Tutorial
-        username={currentUser.name}
-        onClose={() => {
-          setShowTutorial(false);
-          setTutorialHighlight(null);
-          localStorage.setItem('brain-heist-tutorial-complete', 'true');
-        }}
-        highlightStep={setTutorialHighlight}
-      />
-    )}
+      {hackResult && <HackResultModal result={hackResult} onClose={() => setHackResult(null)} />}
+    </div>
+  );
+}; // closes App component
 
-    {hackResult && <HackResultModal result={hackResult} onClose={() => setHackResult(null)} />}
-  </div>
-);
+export default App;
