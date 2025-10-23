@@ -532,26 +532,30 @@ const App: React.FC = () => {
   };
 
   // ⬇️⬇️⬇️ Replace from here down with the exact tail you wanted ⬇️⬇️⬇️
-     return (
-    <div className="w-full h-screen p-2 md:p-4 relative">
-      {/* keep bg behind everything */}
-      <MatrixBackground />
+    return (
+  <div className="w-full h-screen p-2 md:p-4 relative">
+    <MatrixBackground />
 
-      <Layout
-        user={currentUser}
-        onLogout={handleLogout}
-        currentPage={currentPage}
-        setCurrentPage={setCurrentPage}
-        soundService={soundService}
-        tutorialHighlight={tutorialHighlight}
-        theme={theme}
-        onToggleTheme={() => setTheme(t => (t === 'classic' ? 'modern' : 'classic'))}
-      >
-        {/* 👇 Page switch lives INSIDE Layout so spacing & styling stay consistent */}
-        {!currentUser ? (
+    {!currentUser ? (
+      // --- Guest shell so the login looks right without Layout ---
+      <div className="max-w-5xl mx-auto w-full">
+        <div className="hacker-box p-6 md:p-8">
           <Login onLogin={handleLogin} />
-        ) : (
-          (() => {
+        </div>
+      </div>
+    ) : (
+      <>
+        <Layout
+          user={currentUser}
+          onLogout={handleLogout}
+          currentPage={currentPage}
+          setCurrentPage={setCurrentPage}
+          soundService={soundService}
+          tutorialHighlight={tutorialHighlight}
+          theme={theme}
+          onToggleTheme={() => setTheme(t => (t === 'classic' ? 'modern' : 'classic'))}
+        >
+          {(() => {
             switch (currentPage) {
               case PageEnum.PROFILE:
                 return (
@@ -582,30 +586,36 @@ const App: React.FC = () => {
                   />
                 );
               case PageEnum.SHOP:
-                return <Shop user={currentUser} onUpdateUser={handleUpdateUser} items={SHOP_ITEMS} />;
+                return (
+                  <Shop
+                    user={currentUser}
+                    onUpdateUser={handleUpdateUser}
+                    items={SHOP_ITEMS}
+                  />
+                );
               default:
                 return null;
             }
-          })()
+          })()}
+        </Layout>
+
+        {showTutorial && (
+          <Tutorial
+            username={currentUser.name}
+            onClose={() => {
+              setShowTutorial(false);
+              setTutorialHighlight(null);
+              localStorage.setItem('brain-heist-tutorial-complete', 'true');
+            }}
+            highlightStep={setTutorialHighlight}
+          />
         )}
-      </Layout>
+      </>
+    )}
 
-      {/* only render tutorial when we have a user */}
-      {currentUser && showTutorial && (
-        <Tutorial
-          username={currentUser.name}
-          onClose={() => {
-            setShowTutorial(false);
-            setTutorialHighlight(null);
-            localStorage.setItem('brain-heist-tutorial-complete', 'true');
-          }}
-          highlightStep={setTutorialHighlight}
-        />
-      )}
-
-      {hackResult && <HackResultModal result={hackResult} onClose={() => setHackResult(null)} />}
-    </div>
-  );
-}; // <— closes: const App: React.FC = () => { ... }
+    {hackResult && <HackResultModal result={hackResult} onClose={() => setHackResult(null)} />}
+  </div>
+);
+}; // closes App
 
 export default App;
